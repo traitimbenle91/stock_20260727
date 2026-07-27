@@ -120,7 +120,7 @@ class StockScannerWindow(QMainWindow):
 
         # Tạo bảng
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
             'Syb',
             'T-1: Nến Đỏ',
@@ -129,7 +129,8 @@ class StockScannerWindow(QMainWindow):
             'T: Nến Xanh',
             'T: <EMA10',
             'T: Vol<VMA20',
-            'Tổng Điểm'
+            'Tổng Điểm',
+            'Chart'
         ])
 
         # Set column widths
@@ -137,6 +138,7 @@ class StockScannerWindow(QMainWindow):
         for i in range(1, 7):
             self.table.setColumnWidth(i, 110)
         self.table.setColumnWidth(7, 110)
+        self.table.setColumnWidth(8, 90)
 
         # Set row height
         self.table.verticalHeader().setDefaultSectionSize(30)
@@ -236,6 +238,14 @@ class StockScannerWindow(QMainWindow):
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
             self.table.setItem(row_pos, col, item)
+
+        # Cột button Show để mở biểu đồ Plotly theo symbol của dòng
+        show_btn = self.table.cellWidget(row_pos, 8)
+        if show_btn is None:
+            show_btn = QPushButton('Show')
+            show_btn.clicked.connect(self._on_show_chart_clicked)
+            self.table.setCellWidget(row_pos, 8, show_btn)
+        show_btn.setProperty('symbol', symbol)
     
     def on_fetch_finished(self):
         """Hoàn tất fetch dữ liệu"""
@@ -303,6 +313,29 @@ class StockScannerWindow(QMainWindow):
             self.save_btn.setEnabled(True)
             # Reset text sau 2 giây
             QTimer.singleShot(2000, lambda: self.save_btn.setText("Lưu tất cả"))
+
+    def _on_show_chart_clicked(self):
+        """Mở biểu đồ Plotly cho symbol của dòng được bấm Show"""
+        button = self.sender()
+        if button is None:
+            return
+
+        symbol = button.property('symbol')
+        if not symbol:
+            return
+
+        df = self.stock_data.allData.get(symbol)
+        if df is None or df.empty:
+            logger.error(f"Không có dữ liệu để vẽ chart cho {symbol}")
+            return
+
+        try:
+            from uiplotly.plotly_chart import show_stock_plotly_chart
+            show_stock_plotly_chart(symbol, df)
+        except ModuleNotFoundError:
+            logger.error("Thiếu thư viện plotly. Hãy cài bằng lệnh: py -m pip install plotly")
+        except Exception as e:
+            logger.error(f"Lỗi khi mở chart Plotly cho {symbol}: {e}")
 
 
 def main():

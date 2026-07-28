@@ -14,7 +14,7 @@ from utils.logger import get_logger
 MAIN_URL = "https://dchart-api.vndirect.com.vn/dchart/history"
 TIME_DELTA = 900
 TIME_FROM = '2024-1-1'
-TIME_TO = '2026-5-13'
+TIME_TO = '2026-7-25'
 logger = get_logger(__name__)
 
 class StockData:
@@ -72,8 +72,8 @@ class StockData:
 
     def _pull_data(self, syb, iResl, dTimeFrom):
         data = pd.DataFrame()
-        today = int(round(datetime.datetime.timestamp(datetime.datetime.now())))
-        # today = int(datetime.datetime.strptime(TIME_TO, '%Y-%m-%d').timestamp())
+        # today = int(round(datetime.datetime.timestamp(datetime.datetime.now())))
+        today = int(datetime.datetime.strptime(TIME_TO, '%Y-%m-%d').timestamp())
         
         dTimeTo = dTimeFrom + datetime.timedelta(TIME_DELTA)
 

@@ -1,7 +1,7 @@
 import sys
 import pandas as pd
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget, QTableWidgetItem, 
-                             QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel)
+                             QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QHeaderView)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QFont
 
@@ -95,7 +95,7 @@ class StockScannerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Table Scanner")
-        self.setGeometry(100, 100, 1400, 600)
+        self.setGeometry(100, 100, 1500, 650)
         
         # Tạo layout chính
         central_widget = QWidget()
@@ -113,15 +113,11 @@ class StockScannerWindow(QMainWindow):
         # Khởi tạo StockData
         self.stock_data = StockData()
         self._is_first_load = True  # Flag để track lần đầu load
-        
-        # Trạng thái sort cột Tổng Điểm: 0=mặc định, 1=giảm dần, 2=tăng dần
-        self._sort_state = 0
-        self._original_order = []  # Lưu thứ tự gốc để khôi phục
+        self._sort_state = 0  # 0=mặc định, 1=giảm dần, 2=tăng dần
+        self._symbol_results = {}
+        self._symbol_order = []
 
-        # Tạo bảng
-        self.table = QTableWidget()
-        self.table.setColumnCount(9)
-        self.table.setHorizontalHeaderLabels([
+        self.metric_labels = [
             'Syb',
             'T-1: Nến Đỏ',
             'T-1: <EMA10',
@@ -131,21 +127,28 @@ class StockScannerWindow(QMainWindow):
             'T: Vol<VMA20',
             'Tổng Điểm',
             'Chart'
-        ])
+        ]
 
-        # Set column widths
-        self.table.setColumnWidth(0, 80)
-        for i in range(1, 7):
-            self.table.setColumnWidth(i, 110)
-        self.table.setColumnWidth(7, 110)
-        self.table.setColumnWidth(8, 90)
+        # Tạo bảng
+        self.table = QTableWidget()
+        self.table.setRowCount(len(self.metric_labels))
+        self.table.setColumnCount(0)
+        self.table.setVerticalHeaderLabels(self.metric_labels)
+        self.table.setFont(QFont('Segoe UI', 9))
 
-        # Set row height
-        self.table.verticalHeader().setDefaultSectionSize(30)
-
-        # Disable mặc định sort khi click header; tự xử lý toggle
-        self.table.setSortingEnabled(False)
-        self.table.horizontalHeader().sectionClicked.connect(self._on_header_clicked)
+        # Khi transpose bảng: hàng là tiêu chí, cột là mã cổ phiếu
+        vertical_header = self.table.verticalHeader()
+        horizontal_header = self.table.horizontalHeader()
+        if vertical_header is not None:
+            vertical_header.setDefaultSectionSize(30)
+            vertical_header.setMinimumWidth(130)
+            vertical_header.setMaximumWidth(160)
+            vertical_header.sectionClicked.connect(self._on_vertical_header_clicked)
+        if horizontal_header is not None:
+            horizontal_header.setVisible(False)
+            horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+            horizontal_header.setMinimumSectionSize(56)
+            horizontal_header.setDefaultSectionSize(56)
 
         main_layout.addWidget(self.table)
         
@@ -172,8 +175,9 @@ class StockScannerWindow(QMainWindow):
         try:
             df = pd.read_csv('backup/syb_scan.csv')
 
-            # Chỉ quét mã cổ phiếu có đúng 3 ký tự, ví dụ CTG, VCB
-            self.symbols = [syb for syb in df['syb'].astype(str).tolist() if len(syb) == 3]
+            # Chuẩn hóa + loại trùng để tránh hiển thị lặp cột
+            raw_symbols = df['syb'].astype(str).str.strip().str.upper().tolist()
+            self.symbols = list(dict.fromkeys([syb for syb in raw_symbols if len(syb) == 3]))
         except Exception as e:
             logger.error(f"Error loading symbols: {e}")
             self.symbols = ['CTG', 'PFL', 'VCT']  # Default symbols
@@ -182,10 +186,14 @@ class StockScannerWindow(QMainWindow):
         """Fetch/update dữ liệu cho tất cả cổ phiếu"""
         self.refresh_btn.setEnabled(False)
         self.refresh_btn.setText("Đang tải...")
-        
-        # Reset trạng thái sort nhưng giữ lại dữ liệu bảng
         self._sort_state = 0
-        self.table.horizontalHeader().setSortIndicatorShown(False)
+        self._symbol_results = {}
+        self._symbol_order = []
+
+        # Xóa bảng theo layout transpose trước mỗi lần tải
+        self.table.clearContents()
+        self.table.setColumnCount(0)
+        self.table.setHorizontalHeaderLabels([])
 
         # Xác định mode: lần đầu dùng 'initial', sau đó dùng 'update'
         mode = 'initial' if self._is_first_load else 'update'
@@ -198,25 +206,40 @@ class StockScannerWindow(QMainWindow):
         self.fetch_thread.start()
     
     def add_row(self, data):
-        """Update hoặc thêm 1 dòng trong bảng"""
+        """Update hoặc thêm 1 cột (mỗi cột là 1 symbol) trong bảng transpose"""
         symbol = data['symbol']
-        
-        # Tìm xem symbol đã có trong bảng không
-        existing_row = -1
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
+
+        # Lưu dữ liệu mới nhất để phục vụ sort/rebuild theo cột
+        self._symbol_results[symbol] = data
+        if symbol not in self._symbol_order:
+            self._symbol_order.append(symbol)
+
+        if self._sort_state != 0:
+            self._apply_sort_order()
+            return
+
+        self._upsert_symbol_column(symbol, data)
+
+    def _upsert_symbol_column(self, symbol, data):
+        """Thêm/cập nhật một cột symbol vào bảng hiện tại"""
+        # Tìm xem symbol đã có trong cột nào chưa (row 0 là Syb)
+        existing_col = -1
+        for col in range(self.table.columnCount()):
+            item = self.table.item(0, col)
             if item and item.text() == symbol:
-                existing_row = row
+                existing_col = col
                 break
-        
-        # Nếu đã có dòng này, update; không thì insert mới
-        if existing_row >= 0:
-            row_pos = existing_row
+
+        # Nếu đã có cột này thì update, không thì thêm cột mới
+        if existing_col >= 0:
+            col_pos = existing_col
         else:
-            row_pos = self.table.rowCount()
-            self.table.insertRow(row_pos)
-        
-        # Tạo items cho từng cột (bỏ cột VMA20)
+            col_pos = self.table.columnCount()
+            self.table.insertColumn(col_pos)
+            self.table.setHorizontalHeaderItem(col_pos, QTableWidgetItem(symbol))
+            self.table.setColumnWidth(col_pos, 56)
+
+        # Dữ liệu theo từng hàng tiêu chí
         items = [
             data['symbol'],
             str(data['T_minus_1_bullish']),
@@ -228,67 +251,67 @@ class StockScannerWindow(QMainWindow):
             str(data['total_points'])
         ]
 
-        for col, item_text in enumerate(items):
+        for row, item_text in enumerate(items):
             item = QTableWidgetItem(item_text)
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            # Highlight dòng có total_points cao
-            if col == 7 and data['total_points'] >= 4:
+            # Highlight ô tổng điểm cao
+            if row == 7 and data['total_points'] >= 4:
                 item.setBackground(QColor(200, 255, 200))  # Light green
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
-            self.table.setItem(row_pos, col, item)
+            self.table.setItem(row, col_pos, item)
 
-        # Cột button Show để mở biểu đồ Plotly theo symbol của dòng
-        show_btn = self.table.cellWidget(row_pos, 8)
+        # Hàng button Show để mở biểu đồ Plotly theo symbol của cột
+        show_btn = self.table.cellWidget(8, col_pos)
         if show_btn is None:
             show_btn = QPushButton('Show')
+            show_btn.setFixedWidth(48)
             show_btn.clicked.connect(self._on_show_chart_clicked)
-            self.table.setCellWidget(row_pos, 8, show_btn)
+            self.table.setCellWidget(8, col_pos, show_btn)
         show_btn.setProperty('symbol', symbol)
+
+    def _on_vertical_header_clicked(self, row):
+        """Click vào hàng Tổng Điểm để toggle sort theo cột symbol"""
+        TOTAL_ROW = 7
+        if row != TOTAL_ROW:
+            return
+
+        self._sort_state = (self._sort_state + 1) % 3
+        self._apply_sort_order()
+
+    def _apply_sort_order(self):
+        """Sắp xếp lại các cột symbol theo điểm tổng"""
+        if not self._symbol_order:
+            return
+
+        base_index = {syb: idx for idx, syb in enumerate(self._symbol_order)}
+
+        if self._sort_state == 0:
+            ordered_symbols = list(self._symbol_order)
+        elif self._sort_state == 1:
+            ordered_symbols = sorted(
+                self._symbol_order,
+                key=lambda syb: (-float(self._symbol_results.get(syb, {}).get('total_points', 0)), base_index[syb])
+            )
+        else:
+            ordered_symbols = sorted(
+                self._symbol_order,
+                key=lambda syb: (float(self._symbol_results.get(syb, {}).get('total_points', 0)), base_index[syb])
+            )
+
+        self.table.clearContents()
+        self.table.setColumnCount(0)
+        for symbol in ordered_symbols:
+            symbol_data = self._symbol_results.get(symbol)
+            if symbol_data is not None:
+                self._upsert_symbol_column(symbol, symbol_data)
     
     def on_fetch_finished(self):
         """Hoàn tất fetch dữ liệu"""
         self.refresh_btn.setEnabled(True)
         self.refresh_btn.setText("Làm mới dữ liệu")
         logger.debug("Fetch data finished!")
-        self._sort_state = 0
-        
-        # Rebuild _original_order từ thứ tự hiện tại trong bảng
-        self._original_order = list(range(self.table.rowCount()))
-
-    def _on_header_clicked(self, col):
-        """Toggle sort 3 trạng thái trên cột Tổng Điểm (col 7):
-        nhấn 1: giảm dần, nhấn 2: tăng dần, nhấn 3: về mặc định"""
-        TOTAL_COL = 7
-        if col != TOTAL_COL:
-            return
-
-        self._sort_state = (self._sort_state % 3) + 1
-
-        if self._sort_state == 1:
-            self.table.sortItems(TOTAL_COL, Qt.SortOrder.DescendingOrder)
-        elif self._sort_state == 2:
-            self.table.sortItems(TOTAL_COL, Qt.SortOrder.AscendingOrder)
-        else:
-            # Trả về thứ tự ban đầu (thứ tự thêm vào)
-            self._sort_state = 0
-            self.table.horizontalHeader().setSortIndicatorShown(False)
-            rows = self.table.rowCount()
-            # Đọc toàn bộ dữ liệu hiện tại
-            all_rows = []
-            for r in range(rows):
-                row_data = [self.table.item(r, c).text() if self.table.item(r, c) else '' for c in range(self.table.columnCount())]
-                all_rows.append(row_data)
-            # Sắp xếp lại theo thứ tự syb gốc
-            syb_order = {syb: i for i, syb in enumerate(self.symbols)}
-            all_rows.sort(key=lambda r: syb_order.get(r[0], 9999))
-            # Ghi lại vào bảng
-            for r, row_data in enumerate(all_rows):
-                for c, text in enumerate(row_data):
-                    item = self.table.item(r, c)
-                    if item:
-                        item.setText(text)
 
     def save_all_data(self):
         """Lưu tất cả dữ liệu symbol vào CSV files"""

@@ -65,7 +65,7 @@ class DataFetcherThread(QThread):
 
         def get_score_t(row):
             # T: nến xanh (Close >= Open) = +1
-            green_candle = 1 if row['Close'] >= row['Open'] else 0
+            green_candle = 1 if row['Close'] > row['Open'] else 0
             price_below_ema = 1 if row['Close'] < row['EMA10'] else 0
             vol_below_vma = 1 if row['Volume'] < row['VMA20'] else 0.5
             return green_candle, price_below_ema, vol_below_vma

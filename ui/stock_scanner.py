@@ -284,7 +284,7 @@ class StockScannerWindow(QMainWindow):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             # Highlight ô tổng điểm cao
-            if row == 7 and data['total_points'] >= 4:
+            if row == 7 and data['total_points'] >= 5:
                 item.setBackground(QColor(200, 255, 200))  # Light green
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 

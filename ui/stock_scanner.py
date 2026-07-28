@@ -1,7 +1,8 @@
 import sys
 import pandas as pd
+from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget, QTableWidgetItem, 
-                             QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QHeaderView)
+                             QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QHeaderView, QLineEdit)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QFont
 
@@ -10,6 +11,41 @@ from indicator.indicators import add_ema, add_volume_ma
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def calculate_scores(symbol, row_t_minus_1, row_t):
+    """Tính điểm cho 2 nến T-1 và T."""
+    def get_score_t_minus_1(row):
+        red_candle = 1 if row['Close'] < row['Open'] else 0
+        price_below_ema = 1 if row['Close'] < row['EMA10'] else 0
+        vol_below_vma = 1 if row['Volume'] < row['VMA20'] else 0
+        return red_candle, price_below_ema, vol_below_vma
+
+    def get_score_t(row):
+        green_candle = 1 if row['Close'] > row['Open'] else 0
+        price_below_ema = 1 if row['Close'] < row['EMA10'] else 0
+        vol_below_vma = 1 if row['Volume'] < row['VMA20'] else 0.5
+        return green_candle, price_below_ema, vol_below_vma
+
+    t_minus_1_bullish, t_minus_1_ema, t_minus_1_vol = get_score_t_minus_1(row_t_minus_1)
+    t_bullish, t_ema, t_vol = get_score_t(row_t)
+
+    total_points = t_minus_1_bullish + t_minus_1_ema + t_minus_1_vol + \
+                   t_bullish + t_ema + t_vol
+
+    vol_ma20 = int(row_t['VMA20'])
+
+    return {
+        'symbol': symbol,
+        'T_minus_1_bullish': t_minus_1_bullish,
+        'T_minus_1_ema': t_minus_1_ema,
+        'T_minus_1_vol': t_minus_1_vol,
+        'T_bullish': t_bullish,
+        'T_ema': t_ema,
+        'T_vol': t_vol,
+        'vol_ma20': vol_ma20,
+        'total_points': total_points
+    }
 
 
 class DataFetcherThread(QThread):
@@ -50,45 +86,7 @@ class DataFetcherThread(QThread):
         self.finished.emit()
     
     def _calculate_scores(self, symbol, row_t_minus_1, row_t):
-        """
-        Tính điểm cho từng điều kiện:
-        - nến xanh (bullish): Close >= Open = 1, else 0
-        - <EMA10: Close < EMA10 = 1, else 0  
-        - vol<VMA20: Volume < VMA20 = 1, else 0
-        """
-        def get_score_t_minus_1(row):
-            # T-1: nến đỏ (Close < Open) = +1
-            red_candle = 1 if row['Close'] < row['Open'] else 0
-            price_below_ema = 1 if row['Close'] < row['EMA10'] else 0
-            vol_below_vma = 1 if row['Volume'] < row['VMA20'] else 0
-            return red_candle, price_below_ema, vol_below_vma
-
-        def get_score_t(row):
-            # T: nến xanh (Close >= Open) = +1
-            green_candle = 1 if row['Close'] > row['Open'] else 0
-            price_below_ema = 1 if row['Close'] < row['EMA10'] else 0
-            vol_below_vma = 1 if row['Volume'] < row['VMA20'] else 0.5
-            return green_candle, price_below_ema, vol_below_vma
-
-        t_minus_1_bullish, t_minus_1_ema, t_minus_1_vol = get_score_t_minus_1(row_t_minus_1)
-        t_bullish, t_ema, t_vol = get_score_t(row_t)
-        
-        total_points = t_minus_1_bullish + t_minus_1_ema + t_minus_1_vol + \
-                       t_bullish + t_ema + t_vol
-        
-        vol_ma20 = int(row_t['VMA20'])
-        
-        return {
-            'symbol': symbol,
-            'T_minus_1_bullish': t_minus_1_bullish,
-            'T_minus_1_ema': t_minus_1_ema,
-            'T_minus_1_vol': t_minus_1_vol,
-            'T_bullish': t_bullish,
-            'T_ema': t_ema,
-            'T_vol': t_vol,
-            'vol_ma20': vol_ma20,
-            'total_points': total_points
-        }
+        return calculate_scores(symbol, row_t_minus_1, row_t)
 
 
 class StockScannerWindow(QMainWindow):
@@ -103,12 +101,12 @@ class StockScannerWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         
         # Title
-        title = QLabel("Table")
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        main_layout.addWidget(title)
+        # title = QLabel("Table")
+        # title_font = QFont()
+        # title_font.setPointSize(14)
+        # title_font.setBold(True)
+        # title.setFont(title_font)
+        # main_layout.addWidget(title)
         
         # Khởi tạo StockData
         self.stock_data = StockData()
@@ -150,21 +148,45 @@ class StockScannerWindow(QMainWindow):
             horizontal_header.setMinimumSectionSize(56)
             horizontal_header.setDefaultSectionSize(56)
 
-        main_layout.addWidget(self.table)
+        # Top controls layout (cùng 1 hàng)
+        top_layout = QHBoxLayout()
+        date_label = QLabel("Ngày check:")
+        self.prev_date_btn = QPushButton("<")
+        self.prev_date_btn.setMaximumWidth(36)
+        self.prev_date_btn.clicked.connect(self.on_prev_date)
+
+        self.date_input = QLineEdit()
+        today = datetime.now().strftime("%d/%m/%Y")
+        self.date_input.setText(today)
+        self.date_input.setPlaceholderText("dd/mm/yyyy")
+        self.date_input.setMaximumWidth(120)
+
+        self.next_date_btn = QPushButton(">")
+        self.next_date_btn.setMaximumWidth(36)
+        self.next_date_btn.clicked.connect(self.on_next_date)
         
-        # Button layout
-        button_layout = QHBoxLayout()
+        self.check_date_btn = QPushButton("Check")
+        self.check_date_btn.setMaximumWidth(80)
+        self.check_date_btn.clicked.connect(self.on_check_date)
+        
+        top_layout.addWidget(date_label)
+        top_layout.addWidget(self.prev_date_btn)
+        top_layout.addWidget(self.date_input)
+        top_layout.addWidget(self.next_date_btn)
+        top_layout.addWidget(self.check_date_btn)
+        top_layout.addSpacing(16)
+
         self.refresh_btn = QPushButton("Làm mới dữ liệu")
         self.refresh_btn.clicked.connect(self.refresh_data)
-        button_layout.addWidget(self.refresh_btn)
+        top_layout.addWidget(self.refresh_btn)
         
         self.save_btn = QPushButton("Lưu tất cả")
         self.save_btn.clicked.connect(self.save_all_data)
-        button_layout.addWidget(self.save_btn)
-        
-        button_layout.addStretch()
-        
-        main_layout.addLayout(button_layout)
+        top_layout.addWidget(self.save_btn)
+        top_layout.addStretch()
+
+        main_layout.addLayout(top_layout)
+        main_layout.addWidget(self.table)
         
         # Load data
         self.load_symbols()
@@ -256,7 +278,7 @@ class StockScannerWindow(QMainWindow):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             # Highlight ô tổng điểm cao
-            if row == 7 and data['total_points'] >= 5:
+            if row == 7 and data['total_points'] >= 4:
                 item.setBackground(QColor(200, 255, 200))  # Light green
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
@@ -359,6 +381,93 @@ class StockScannerWindow(QMainWindow):
             logger.error("Thiếu thư viện plotly. Hãy cài bằng lệnh: py -m pip install plotly")
         except Exception as e:
             logger.error(f"Lỗi khi mở chart Plotly cho {symbol}: {e}")
+
+    def on_check_date(self):
+        """Xử lý khi bấm button Check ngày"""
+        date_text = self.date_input.text().strip()
+        if not date_text:
+            logger.warning("Vui lòng nhập ngày")
+            return
+        
+        try:
+            # Validate định dạng ngày dd/mm/yyyy
+            check_date = datetime.strptime(date_text, "%d/%m/%Y")
+            if hasattr(self, 'fetch_thread') and self.fetch_thread.isRunning():
+                logger.warning("Đang tải dữ liệu. Vui lòng chờ tải xong rồi Check ngày.")
+                return
+
+            target_date = pd.Timestamp(check_date.date())
+            date_results = {}
+            date_order = []
+
+            for symbol in self.symbols:
+                df = self.stock_data.allData.get(symbol)
+                if df is None or len(df) < 2:
+                    continue
+
+                add_ema(df, period=10, source_col="Close")
+                add_volume_ma(df, period=20, source_col="Volume")
+
+                date_series = pd.to_datetime(df['Date'], errors='coerce').dt.normalize()
+                matched_rows = df.index[date_series == target_date]
+                if len(matched_rows) == 0:
+                    continue
+
+                idx_t = matched_rows[-1]
+                if idx_t <= 0:
+                    continue
+
+                row_t_minus_1 = df.iloc[idx_t - 1]
+                row_t = df.iloc[idx_t]
+                result = calculate_scores(symbol, row_t_minus_1, row_t)
+
+                date_results[symbol] = result
+                date_order.append(symbol)
+
+            self._sort_state = 0
+            self._symbol_results = date_results
+            self._symbol_order = date_order
+
+            self.table.clearContents()
+            self.table.setColumnCount(0)
+            self.table.setHorizontalHeaderLabels([])
+
+            for symbol in self._symbol_order:
+                self._upsert_symbol_column(symbol, self._symbol_results[symbol])
+
+            if self._symbol_order:
+                logger.info(
+                    f"Đã cập nhật bảng theo ngày {check_date.strftime('%d/%m/%Y')} ({len(self._symbol_order)} mã)"
+                )
+            else:
+                logger.warning(
+                    f"Không có dữ liệu cho ngày {check_date.strftime('%d/%m/%Y')}."
+                )
+        except ValueError:
+            logger.error(f"Định dạng ngày không hợp lệ. Vui lòng nhập theo dd/mm/yyyy")
+
+    def _shift_check_date(self, days):
+        """Lùi/tiến ngày check và tự động cập nhật bảng."""
+        date_text = self.date_input.text().strip()
+        if not date_text:
+            logger.warning("Vui lòng nhập ngày")
+            return
+
+        try:
+            base_date = datetime.strptime(date_text, "%d/%m/%Y")
+            new_date = base_date + pd.Timedelta(days=days)
+            self.date_input.setText(new_date.strftime("%d/%m/%Y"))
+            self.on_check_date()
+        except ValueError:
+            logger.error("Định dạng ngày không hợp lệ. Vui lòng nhập theo dd/mm/yyyy")
+
+    def on_prev_date(self):
+        """Lùi về 1 ngày."""
+        self._shift_check_date(-1)
+
+    def on_next_date(self):
+        """Tiến thêm 1 ngày."""
+        self._shift_check_date(1)
 
 
 def main():

@@ -33,6 +33,10 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     total_points = t_minus_1_bullish + t_minus_1_ema + t_minus_1_vol + \
                    t_bullish + t_ema + t_vol
 
+    prev_close = float(row_t_minus_1['Close'])
+    curr_close = float(row_t['Close'])
+    pct_change = 0.0 if prev_close == 0 else ((curr_close - prev_close) / prev_close) * 100
+
     vol_ma20 = int(row_t['VMA20'])
 
     return {
@@ -44,7 +48,8 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'T_ema': t_ema,
         'T_vol': t_vol,
         'vol_ma20': vol_ma20,
-        'total_points': total_points
+        'total_points': total_points,
+        'pct_change': pct_change
     }
 
 
@@ -124,6 +129,7 @@ class StockScannerWindow(QMainWindow):
             'T: <EMA10',
             'T: Vol<VMA20',
             'Tổng Điểm',
+            '%',
             'Chart'
         ]
 
@@ -269,7 +275,8 @@ class StockScannerWindow(QMainWindow):
             str(data['T_bullish']),
             str(data['T_ema']),
             str(data['T_vol']),
-            str(data['total_points'])
+            str(data['total_points']),
+            f"{float(data.get('pct_change', 0.0)):.2f}"
         ]
 
         for row, item_text in enumerate(items):
@@ -284,12 +291,13 @@ class StockScannerWindow(QMainWindow):
             self.table.setItem(row, col_pos, item)
 
         # Hàng button Show để mở biểu đồ Plotly theo symbol của cột
-        show_btn = self.table.cellWidget(8, col_pos)
+        chart_row = self.metric_labels.index('Chart')
+        show_btn = self.table.cellWidget(chart_row, col_pos)
         if show_btn is None:
             show_btn = QPushButton('Show')
             show_btn.setFixedWidth(48)
             show_btn.clicked.connect(self._on_show_chart_clicked)
-            self.table.setCellWidget(8, col_pos, show_btn)
+            self.table.setCellWidget(chart_row, col_pos, show_btn)
         show_btn.setProperty('symbol', symbol)
 
     def _on_vertical_header_clicked(self, row):

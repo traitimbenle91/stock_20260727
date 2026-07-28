@@ -156,8 +156,7 @@ class StockScannerWindow(QMainWindow):
         self.prev_date_btn.clicked.connect(self.on_prev_date)
 
         self.date_input = QLineEdit()
-        today = datetime.now().strftime("%d/%m/%Y")
-        self.date_input.setText(today)
+        self.date_input.setText("")
         self.date_input.setPlaceholderText("dd/mm/yyyy")
         self.date_input.setMaximumWidth(120)
 
@@ -333,7 +332,27 @@ class StockScannerWindow(QMainWindow):
         """Hoàn tất fetch dữ liệu"""
         self.refresh_btn.setEnabled(True)
         self.refresh_btn.setText("Làm mới dữ liệu")
+        self._set_check_date_to_latest_available()
         logger.debug("Fetch data finished!")
+
+    def _set_check_date_to_latest_available(self):
+        """Đặt ô ngày check theo ngày mới nhất đang có trong dữ liệu."""
+        latest_date = None
+
+        for df in self.stock_data.allData.values():
+            if df is None or df.empty or 'Date' not in df.columns:
+                continue
+
+            date_series = pd.to_datetime(df['Date'], errors='coerce').dropna()
+            if date_series.empty:
+                continue
+
+            symbol_latest = date_series.max()
+            if latest_date is None or symbol_latest > latest_date:
+                latest_date = symbol_latest
+
+        if latest_date is not None:
+            self.date_input.setText(latest_date.strftime("%d/%m/%Y"))
 
     def save_all_data(self):
         """Lưu tất cả dữ liệu symbol vào CSV files"""

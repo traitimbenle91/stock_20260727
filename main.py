@@ -1,4 +1,4 @@
-from ui.stock_scanner import main as run_scanner
+from ui.mainui import main as run_scanner
 
 
 if __name__ == '__main__':

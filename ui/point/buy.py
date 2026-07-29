@@ -1,9 +1,20 @@
-import sys
 import pandas as pd
 from datetime import datetime
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidget, QTableWidgetItem, 
-                             QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QHeaderView, QLineEdit)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt6.QtWidgets import (
+    QMainWindow,
+    QTableWidget,
+    QTableWidgetItem,
+    QGroupBox,
+    QSizePolicy,
+    QVBoxLayout,
+    QHBoxLayout,
+    QWidget,
+    QPushButton,
+    QLabel,
+    QHeaderView,
+    QLineEdit,
+)
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
 from ststock.StockData import StockData
@@ -11,7 +22,6 @@ from indicator.indicators import add_ema, add_volume_ma
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
 
 def calculate_scores(symbol, row_t_minus_1, row_t):
     """Tính điểm cho 2 nến T-1 và T."""
@@ -51,59 +61,25 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'total_points': total_points,
         'pct_change': pct_change
     }
+class BuyScannerWindow(QMainWindow):
+    fetch_completed = pyqtSignal()
 
-
-class DataFetcherThread(QThread):
-    """Thread để fetch/update dữ liệu stock mà không block UI"""
-    progress = pyqtSignal(dict)  # Emit khi fetch xong 1 symbol
-    finished = pyqtSignal()      # Emit khi xong hết
-    
-    def __init__(self, symbols, stock_data, mode='initial'):
-        super().__init__()
-        self.symbols = symbols
-        self.stock_data = stock_data
-        self.mode = mode  # 'initial' hoặc 'update'
-    
-    def run(self):
-        for symbol in self.symbols:
-            try:
-                if self.mode == 'initial':
-                    self.stock_data.get_data(symbol, resl='1D')
-                else:  # mode == 'update'
-                    self.stock_data.update_data(symbol, resl='1D')
-                
-                df = self.stock_data.allData[symbol]
-                if df is not None and len(df) >= 2:
-                    # Calculate indicators
-                    add_ema(df, period=10, source_col="Close")
-                    add_volume_ma(df, period=20, source_col="Volume")
-                    
-                    # Get last 2 rows (T-1 and T)
-                    row_t_minus_1 = df.iloc[-2]
-                    row_t = df.iloc[-1]
-                    
-                    # Calculate scores
-                    result = self._calculate_scores(symbol, row_t_minus_1, row_t)
-                    self.progress.emit(result)
-            except Exception as e:
-                logger.error(f"Error fetching {symbol}: {e}")
-                
-        self.finished.emit()
-    
-    def _calculate_scores(self, symbol, row_t_minus_1, row_t):
-        return calculate_scores(symbol, row_t_minus_1, row_t)
-
-
-class StockScannerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Table Scanner")
-        self.setGeometry(100, 100, 1500, 650)
         
         # Tạo layout chính
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Group box bao toàn bộ UI buy
+        group_box = QGroupBox("B")
+        group_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        group_layout = QVBoxLayout(group_box)
+        group_layout.setContentsMargins(6, 6, 6, 6)
+        group_layout.setSpacing(6)
         
         # Title
         # title = QLabel("Table")
@@ -139,6 +115,7 @@ class StockScannerWindow(QMainWindow):
         self.table.setColumnCount(0)
         self.table.setVerticalHeaderLabels(self.metric_labels)
         self.table.setFont(QFont('Segoe UI', 9))
+        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
         # Khi transpose bảng: hàng là tiêu chí, cột là mã cổ phiếu
         vertical_header = self.table.verticalHeader()
@@ -153,6 +130,9 @@ class StockScannerWindow(QMainWindow):
             horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             horizontal_header.setMinimumSectionSize(56)
             horizontal_header.setDefaultSectionSize(56)
+
+        # Fit chiều cao bảng đúng theo số hàng để tránh khoảng trống trong GroupBox.
+        self._fit_table_height()
 
         # Top controls layout (cùng 1 hàng)
         top_layout = QHBoxLayout()
@@ -179,23 +159,15 @@ class StockScannerWindow(QMainWindow):
         top_layout.addWidget(self.date_input)
         top_layout.addWidget(self.next_date_btn)
         top_layout.addWidget(self.check_date_btn)
-        top_layout.addSpacing(16)
-
-        self.refresh_btn = QPushButton("Làm mới dữ liệu")
-        self.refresh_btn.clicked.connect(self.refresh_data)
-        top_layout.addWidget(self.refresh_btn)
-        
-        self.save_btn = QPushButton("Lưu tất cả")
-        self.save_btn.clicked.connect(self.save_all_data)
-        top_layout.addWidget(self.save_btn)
         top_layout.addStretch()
 
-        main_layout.addLayout(top_layout)
-        main_layout.addWidget(self.table)
+        group_layout.addLayout(top_layout)
+        group_layout.addWidget(self.table)
+        main_layout.addWidget(group_box)
+        main_layout.addStretch()
         
         # Load data
         self.load_symbols()
-        self.refresh_data()
     
     def load_symbols(self):
         """Đọc danh sách cổ phiếu từ backup/syb_scan.csv - chỉ lấy mã 3 ký tự"""
@@ -208,29 +180,13 @@ class StockScannerWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error loading symbols: {e}")
             self.symbols = ['CTG', 'PFL', 'VCT']  # Default symbols
-    
-    def refresh_data(self):
-        """Fetch/update dữ liệu cho tất cả cổ phiếu"""
-        self.refresh_btn.setEnabled(False)
-        self.refresh_btn.setText("Đang tải...")
-        self._sort_state = 0
-        self._symbol_results = {}
-        self._symbol_order = []
 
-        # Xóa bảng theo layout transpose trước mỗi lần tải
-        self.table.clearContents()
-        self.table.setColumnCount(0)
-        self.table.setHorizontalHeaderLabels([])
-
-        # Xác định mode: lần đầu dùng 'initial', sau đó dùng 'update'
-        mode = 'initial' if self._is_first_load else 'update'
-        self._is_first_load = False
-
-        # Start fetch thread
-        self.fetch_thread = DataFetcherThread(self.symbols, self.stock_data, mode=mode)
-        self.fetch_thread.progress.connect(self.add_row)
-        self.fetch_thread.finished.connect(self.on_fetch_finished)
-        self.fetch_thread.start()
+    def _fit_table_height(self):
+        """Đặt chiều cao bảng vừa đủ hiển thị toàn bộ hàng hiện có."""
+        rows_height = self.table.verticalHeader().length()
+        header_height = self.table.horizontalHeader().height() if self.table.horizontalHeader() else 0
+        frame = self.table.frameWidth() * 2
+        self.table.setFixedHeight(rows_height + header_height + frame + 2)
     
     def add_row(self, data):
         """Update hoặc thêm 1 cột (mỗi cột là 1 symbol) trong bảng transpose"""
@@ -338,9 +294,8 @@ class StockScannerWindow(QMainWindow):
     
     def on_fetch_finished(self):
         """Hoàn tất fetch dữ liệu"""
-        self.refresh_btn.setEnabled(True)
-        self.refresh_btn.setText("Làm mới dữ liệu")
         self._set_check_date_to_latest_available()
+        self.fetch_completed.emit()
         logger.debug("Fetch data finished!")
 
     def _set_check_date_to_latest_available(self):
@@ -361,30 +316,6 @@ class StockScannerWindow(QMainWindow):
 
         if latest_date is not None:
             self.date_input.setText(latest_date.strftime("%d/%m/%Y"))
-
-    def save_all_data(self):
-        """Lưu tất cả dữ liệu symbol vào CSV files"""
-        self.save_btn.setEnabled(False)
-        self.save_btn.setText("Đang lưu...")
-        
-        saved_count = 0
-        try:
-            for symbol, df in self.stock_data.allData.items():
-                if df is not None and not df.empty:
-                    csv_path = f'.//backup//1D//{symbol}.csv'
-                    df.to_csv(csv_path, index=True, encoding='utf-8')
-                    saved_count += 1
-                    logger.debug(f"Saved {symbol} to {csv_path}")
-            
-            logger.info(f"Lưu thành công {saved_count} file CSV!")
-            self.save_btn.setText(f"✓ Lưu {saved_count} file")
-        except Exception as e:
-            logger.error(f"Lỗi khi lưu dữ liệu: {e}")
-            self.save_btn.setText("Lỗi lưu dữ liệu")
-        finally:
-            self.save_btn.setEnabled(True)
-            # Reset text sau 2 giây
-            QTimer.singleShot(2000, lambda: self.save_btn.setText("Lưu tất cả"))
 
     def _on_show_chart_clicked(self):
         """Mở biểu đồ Plotly cho symbol của dòng được bấm Show"""
@@ -495,14 +426,3 @@ class StockScannerWindow(QMainWindow):
     def on_next_date(self):
         """Tiến thêm 1 ngày."""
         self._shift_check_date(1)
-
-
-def main():
-    app = QApplication(sys.argv)
-    window = StockScannerWindow()
-    window.show()
-    sys.exit(app.exec())
-
-
-if __name__ == '__main__':
-    main()

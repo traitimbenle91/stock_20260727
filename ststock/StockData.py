@@ -72,8 +72,8 @@ class StockData:
 
     def _pull_data(self, syb, iResl, dTimeFrom):
         data = pd.DataFrame()
-        # today = int(round(datetime.datetime.timestamp(datetime.datetime.now())))
-        today = int(datetime.datetime.strptime(TIME_TO, '%Y-%m-%d').timestamp())
+        today = int(round(datetime.datetime.timestamp(datetime.datetime.now())))
+        # today = int(datetime.datetime.strptime(TIME_TO, '%Y-%m-%d').timestamp())
         
         dTimeTo = dTimeFrom + datetime.timedelta(TIME_DELTA)
 

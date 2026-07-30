@@ -183,7 +183,7 @@ class SellScannerWindow(QMainWindow):
 		try:
 			df = pd.read_csv("backup/syb_hold_scan.csv")
 			raw_symbols = df["syb"].astype(str).str.strip().str.upper().tolist()
-			self.symbols = list(dict.fromkeys([syb for syb in raw_symbols if len(syb) == 3]))
+			self.symbols = list(dict.fromkeys([syb for syb in raw_symbols]))
 		except Exception as e:
 			logger.error(f"Error loading symbols: {e}")
 			self.symbols = ["CTG", "VCB", "MBB"]

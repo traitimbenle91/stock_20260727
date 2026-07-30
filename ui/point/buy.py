@@ -47,6 +47,10 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     curr_close = float(row_t['Close'])
     pct_change = 0.0 if prev_close == 0 else ((curr_close - prev_close) / prev_close) * 100
 
+    prev_vol = float(row_t_minus_1['Volume'])
+    curr_vol = float(row_t['Volume'])
+    vol_vs_t_minus_1 = 0.0 if prev_vol == 0 else ((curr_vol - prev_vol) / prev_vol) * 100
+
     vol_ma20 = int(row_t['VMA20'])
 
     return {
@@ -59,7 +63,8 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'T_vol': t_vol,
         'vol_ma20': vol_ma20,
         'total_points': total_points,
-        'pct_change': pct_change
+        'pct_change': pct_change,
+        'vol_vs_t_minus_1': vol_vs_t_minus_1
     }
 class BuyScannerWindow(QMainWindow):
     fetch_completed = pyqtSignal()
@@ -106,6 +111,8 @@ class BuyScannerWindow(QMainWindow):
             'T: Vol<VMA20',
             'Tổng Điểm',
             '%',
+            'Vol_vs_T-1',
+            'Price_vs_T-1',
             'Chart'
         ]
 
@@ -232,7 +239,9 @@ class BuyScannerWindow(QMainWindow):
             str(data['T_ema']),
             str(data['T_vol']),
             str(data['total_points']),
-            f"{float(data.get('pct_change', 0.0)):.2f}"
+            f"{float(data.get('pct_change', 0.0)):.2f}",
+            f"{float(data.get('vol_vs_t_minus_1', 0.0)):.2f}%",
+            f"{float(data.get('pct_change', 0.0)):.2f}%"
         ]
 
         for row, item_text in enumerate(items):

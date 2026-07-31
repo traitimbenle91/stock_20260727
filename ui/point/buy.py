@@ -285,6 +285,10 @@ class BuyScannerWindow(QMainWindow):
                 item.setBackground(QColor(200, 255, 200))  # Light green
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
+            # Highlight hàng Price: T_vs_T-1 nếu tăng mạnh
+            if row == 11 and float(data.get('pct_change', 0.0)) >= 3:
+                item.setBackground(QColor(255, 120, 120))
+
             self.table.setItem(row, col_pos, item)
 
         # Hàng button Show để mở biểu đồ Plotly theo symbol của cột

@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime
+from typing import Callable, Optional
 from PyQt6.QtWidgets import (
 	QMainWindow,
 	QTableWidget,
@@ -10,14 +11,16 @@ from PyQt6.QtWidgets import (
 	QHBoxLayout,
 	QWidget,
 	QPushButton,
+	QCheckBox,
 	QLabel,
 	QHeaderView,
 	QLineEdit,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
 from ststock.StockData import StockData
+from ststock.StockDataManager import DataFetcherThread
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,12 +38,11 @@ def calculate_sell_scores(symbol, row_t_minus_1, row_t):
 
 	price_point = 0
 	vol_point = 0
-	if price_vs_t_minus_1 > 0 and vol_vs_t_minus_1 < 30:
-		price_point = 1
-		vol_point = 1
-	elif price_vs_t_minus_1 < 0 and vol_vs_t_minus_1 > 0:
-		price_point = 1
-		vol_point = 1
+	if price_vs_t_minus_1 > 0:
+		price_point = 2
+
+	if vol_vs_t_minus_1 > 0:
+		vol_point = 0
 
 	total_points = price_point + vol_point
 
@@ -52,38 +54,6 @@ def calculate_sell_scores(symbol, row_t_minus_1, row_t):
 		"vol_point": vol_point,
 		"total_points": total_points,
 	}
-
-
-class SellDataFetcherThread(QThread):
-	"""Thread fetch/update dữ liệu cho Sell để không block UI."""
-
-	progress = pyqtSignal(dict)
-	finished = pyqtSignal()
-
-	def __init__(self, symbols, stock_data, mode="initial"):
-		super().__init__()
-		self.symbols = symbols
-		self.stock_data = stock_data
-		self.mode = mode
-
-	def run(self):
-		for symbol in self.symbols:
-			try:
-				if self.mode == "initial":
-					self.stock_data.get_data(symbol, resl="1D")
-				else:
-					self.stock_data.update_data(symbol, resl="1D")
-
-				df = self.stock_data.allData[symbol]
-				if df is not None and len(df) >= 2:
-					row_t_minus_1 = df.iloc[-2]
-					row_t = df.iloc[-1]
-					result = calculate_sell_scores(symbol, row_t_minus_1, row_t)
-					self.progress.emit(result)
-			except Exception as e:
-				logger.error(f"Error fetching {symbol}: {e}")
-
-		self.finished.emit()
 
 
 class SellScannerWindow(QMainWindow):
@@ -109,11 +79,13 @@ class SellScannerWindow(QMainWindow):
 		self._sort_state = 0
 		self._symbol_results = {}
 		self._symbol_order = []
+		self._get_next_h_date: Optional[Callable[[datetime], Optional[pd.Timestamp]]] = None
+		self._get_hold_check_date: Optional[Callable[[], str]] = None
 
 		self.metric_labels = [
 			"Syb",
-			"Vol_vs_T-1",
-			"Price_vs_T-1",
+			"Vol: T_vs_T-1",
+			"Price: T_vs_T-1",
 			"Tổng Điểm",
 		]
 
@@ -158,11 +130,15 @@ class SellScannerWindow(QMainWindow):
 		self.check_date_btn.setMaximumWidth(80)
 		self.check_date_btn.clicked.connect(self.on_check_date)
 
+		self.auto_next_h_checkbox = QCheckBox("Auto Next H")
+		self.auto_next_h_checkbox.toggled.connect(self._on_auto_next_h_toggled)
+
 		top_layout.addWidget(date_label)
 		top_layout.addWidget(self.prev_date_btn)
 		top_layout.addWidget(self.date_input)
 		top_layout.addWidget(self.next_date_btn)
 		top_layout.addWidget(self.check_date_btn)
+		top_layout.addWidget(self.auto_next_h_checkbox)
 		top_layout.addStretch()
 
 		group_layout.addLayout(top_layout)
@@ -170,23 +146,16 @@ class SellScannerWindow(QMainWindow):
 		main_layout.addWidget(group_box)
 		main_layout.addStretch()
 
-		self.load_symbols()
+		# symbols sẽ được gán từ mainui.py
+		self.symbols = []
 
 	def _fit_table_height(self):
-		rows_height = self.table.verticalHeader().length()
-		header_height = self.table.horizontalHeader().height() if self.table.horizontalHeader() else 0
+		vertical_header = self.table.verticalHeader()
+		horizontal_header = self.table.horizontalHeader()
+		rows_height = vertical_header.length() if vertical_header is not None else 0
+		header_height = horizontal_header.height() if horizontal_header is not None else 0
 		frame = self.table.frameWidth() * 2
 		self.table.setFixedHeight(rows_height + header_height + frame + 2)
-
-	def load_symbols(self):
-		"""Đọc danh sách cổ phiếu từ backup/syb_scan.csv - chỉ lấy mã 3 ký tự."""
-		try:
-			df = pd.read_csv("backup/syb_hold_scan.csv")
-			raw_symbols = df["syb"].astype(str).str.strip().str.upper().tolist()
-			self.symbols = list(dict.fromkeys([syb for syb in raw_symbols]))
-		except Exception as e:
-			logger.error(f"Error loading symbols: {e}")
-			self.symbols = ["CTG", "VCB", "MBB"]
 
 	def refresh_data(self):
 		"""Fetch/update dữ liệu và cập nhật dần từng cột symbol."""
@@ -200,7 +169,7 @@ class SellScannerWindow(QMainWindow):
 		mode = "initial" if self._is_first_load else "update"
 		self._is_first_load = False
 
-		self.fetch_thread = SellDataFetcherThread(self.symbols, self.stock_data, mode=mode)
+		self.fetch_thread = DataFetcherThread(self.symbols, self.stock_data, score_fn=calculate_sell_scores, mode=mode)
 		self.fetch_thread.progress.connect(self.add_row)
 		self.fetch_thread.finished.connect(self.on_fetch_finished)
 		self.fetch_thread.start()
@@ -283,6 +252,23 @@ class SellScannerWindow(QMainWindow):
 			if symbol_data is not None:
 				self._upsert_symbol_column(symbol, symbol_data)
 
+	def apply_external_order(self, ordered_symbols):
+		"""Sắp xếp lại cột theo danh sách symbol từ bảng ngoài (e.g. B)."""
+		if not self._symbol_results:
+			return
+		self.table.clearContents()
+		self.table.setColumnCount(0)
+		for symbol in ordered_symbols:
+			symbol_data = self._symbol_results.get(symbol)
+			if symbol_data is not None:
+				self._upsert_symbol_column(symbol, symbol_data)
+		# Append any symbols not in ordered_symbols
+		for symbol in self._symbol_order:
+			if symbol not in ordered_symbols:
+				symbol_data = self._symbol_results.get(symbol)
+				if symbol_data is not None:
+					self._upsert_symbol_column(symbol, symbol_data)
+
 	def on_fetch_finished(self):
 		self._set_check_date_to_latest_available()
 		self.fetch_completed.emit()
@@ -305,8 +291,43 @@ class SellScannerWindow(QMainWindow):
 		if latest_date is not None:
 			self.date_input.setText(latest_date.strftime("%d/%m/%Y"))
 
-	def on_check_date(self):
+	def _on_auto_next_h_toggled(self, checked):
+		if checked and self.sync_to_next_hold_date():
+			self.on_check_date(skip_auto_sync=True)
+
+	def sync_to_next_hold_date(self, hold_date_text=None):
+		"""Đồng bộ ngày Sell sang ngày có dữ liệu kế tiếp sau ngày check của Hold."""
+		if self._get_next_h_date is None:
+			logger.warning("Chưa cấu hình nguồn ngày cho Auto Next H.")
+			return False
+
+		if hold_date_text is None:
+			hold_date_text = self._get_hold_check_date() if callable(self._get_hold_check_date) else ""
+
+		hold_date_text = (hold_date_text or "").strip()
+		if not hold_date_text:
+			logger.warning("Bảng H chưa có Ngày check để đồng bộ.")
+			return False
+
+		try:
+			hold_date = datetime.strptime(hold_date_text, "%d/%m/%Y")
+		except ValueError:
+			logger.error("Ngày check của bảng H không hợp lệ. Vui lòng nhập theo dd/mm/yyyy")
+			return False
+
+		next_date = self._get_next_h_date(hold_date)
+		if next_date is None:
+			logger.warning(f"Không tìm thấy ngày dữ liệu kế tiếp sau {hold_date_text} trong bảng H.")
+			return False
+
+		self.date_input.setText(next_date.strftime("%d/%m/%Y"))
+		return True
+
+	def on_check_date(self, _checked=False, skip_auto_sync=False):
 		"""Logic check ngày chỉ dùng trong sell.py."""
+		if not skip_auto_sync and self.auto_next_h_checkbox.isChecked() and not self.sync_to_next_hold_date():
+			return
+
 		date_text = self.date_input.text().strip()
 		if not date_text:
 			logger.warning("Vui lòng nhập ngày")

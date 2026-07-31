@@ -51,6 +51,14 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     curr_vol = float(row_t['Volume'])
     vol_vs_t_minus_1 = 0.0 if prev_vol == 0 else ((curr_vol - prev_vol) / prev_vol) * 100
 
+    open_price = float(row_t['Open'])
+    close_price = float(row_t['Close'])
+    low_price = float(row_t['Low'])
+    high_price = float(row_t['High'])
+
+    price_o_vs_c = 0.0 if open_price == 0 else ((close_price - open_price) / open_price) * 100
+    price_h_vs_l = 0.0 if low_price == 0 else ((high_price - low_price) / low_price) * 100
+
     vol_ma20 = int(row_t['VMA20'])
 
     return {
@@ -64,10 +72,14 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'vol_ma20': vol_ma20,
         'total_points': total_points,
         'pct_change': pct_change,
-        'vol_vs_t_minus_1': vol_vs_t_minus_1
+        'vol_vs_t_minus_1': vol_vs_t_minus_1,
+        'price_o_vs_c': price_o_vs_c,
+        'price_h_vs_l': price_h_vs_l
     }
 class BuyScannerWindow(QMainWindow):
     fetch_completed = pyqtSignal()
+    sort_order_changed = pyqtSignal(list)  # Emits ordered symbol list after sort
+    check_date_changed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -110,9 +122,10 @@ class BuyScannerWindow(QMainWindow):
             'T: <EMA10',
             'T: Vol<VMA20',
             'Tổng Điểm',
-            '%',
-            'Vol_vs_T-1',
-            'Price_vs_T-1',
+            'Vol: T_vs_T-1',
+            'Price: H_vs_L',
+            'Price: C_vs_O',
+            'Price: T_vs_T-1',
             'Chart'
         ]
 
@@ -160,12 +173,18 @@ class BuyScannerWindow(QMainWindow):
         self.check_date_btn = QPushButton("Check")
         self.check_date_btn.setMaximumWidth(80)
         self.check_date_btn.clicked.connect(self.on_check_date)
+
+        self.score_ratio_view = QLineEdit()
+        self.score_ratio_view.setReadOnly(True)
+        self.score_ratio_view.setMaximumWidth(220)
+        self.score_ratio_view.setText(">=5: 0/0 (0.00%)")
         
         top_layout.addWidget(date_label)
         top_layout.addWidget(self.prev_date_btn)
         top_layout.addWidget(self.date_input)
         top_layout.addWidget(self.next_date_btn)
         top_layout.addWidget(self.check_date_btn)
+        top_layout.addWidget(self.score_ratio_view)
         top_layout.addStretch()
 
         group_layout.addLayout(top_layout)
@@ -173,20 +192,8 @@ class BuyScannerWindow(QMainWindow):
         main_layout.addWidget(group_box)
         main_layout.addStretch()
         
-        # Load data
-        self.load_symbols()
-    
-    def load_symbols(self):
-        """Đọc danh sách cổ phiếu từ backup/syb_scan.csv - chỉ lấy mã 3 ký tự"""
-        try:
-            df = pd.read_csv('backup/syb_scan.csv')
-
-            # Chuẩn hóa + loại trùng để tránh hiển thị lặp cột
-            raw_symbols = df['syb'].astype(str).str.strip().str.upper().tolist()
-            self.symbols = list(dict.fromkeys([syb for syb in raw_symbols ]))
-        except Exception as e:
-            logger.error(f"Error loading symbols: {e}")
-            self.symbols = ['CTG', 'PFL', 'VCT']  # Default symbols
+        # symbols sẽ được gán từ mainui.py
+        self.symbols = []
 
     def _fit_table_height(self):
         """Đặt chiều cao bảng vừa đủ hiển thị toàn bộ hàng hiện có."""
@@ -209,6 +216,22 @@ class BuyScannerWindow(QMainWindow):
             return
 
         self._upsert_symbol_column(symbol, data)
+        self._update_score_ratio_view()
+
+    def _update_score_ratio_view(self):
+        """Hiển thị tỷ lệ số mã có Tổng Điểm >= 5 so với tổng số mã."""
+        total_symbols = len(self._symbol_results)
+        if total_symbols == 0:
+            self.score_ratio_view.setText("0/0 (0.00%)")
+            return
+
+        passing_symbols = sum(
+            1
+            for result in self._symbol_results.values()
+            if float(result.get('total_points', 0)) >= 5
+        )
+        ratio = (passing_symbols / total_symbols) * 100
+        self.score_ratio_view.setText(f"{passing_symbols}/{total_symbols} ({ratio:.2f}%)")
 
     def _upsert_symbol_column(self, symbol, data):
         """Thêm/cập nhật một cột symbol vào bảng hiện tại"""
@@ -239,8 +262,9 @@ class BuyScannerWindow(QMainWindow):
             str(data['T_ema']),
             str(data['T_vol']),
             str(data['total_points']),
-            f"{float(data.get('pct_change', 0.0)):.2f}",
             f"{float(data.get('vol_vs_t_minus_1', 0.0)):.2f}%",
+            f"{float(data.get('price_h_vs_l', 0.0)):.2f}%",
+            f"{float(data.get('price_o_vs_c', 0.0)):.2f}%",
             f"{float(data.get('pct_change', 0.0)):.2f}%"
         ]
 
@@ -277,6 +301,7 @@ class BuyScannerWindow(QMainWindow):
     def _apply_sort_order(self):
         """Sắp xếp lại các cột symbol theo điểm tổng"""
         if not self._symbol_order:
+            self._update_score_ratio_view()
             return
 
         base_index = {syb: idx for idx, syb in enumerate(self._symbol_order)}
@@ -300,7 +325,11 @@ class BuyScannerWindow(QMainWindow):
             symbol_data = self._symbol_results.get(symbol)
             if symbol_data is not None:
                 self._upsert_symbol_column(symbol, symbol_data)
-    
+
+        self._update_score_ratio_view()
+
+        self.sort_order_changed.emit(ordered_symbols)
+
     def on_fetch_finished(self):
         """Hoàn tất fetch dữ liệu"""
         self._set_check_date_to_latest_available()
@@ -324,7 +353,32 @@ class BuyScannerWindow(QMainWindow):
                 latest_date = symbol_latest
 
         if latest_date is not None:
-            self.date_input.setText(latest_date.strftime("%d/%m/%Y"))
+            formatted_date = latest_date.strftime("%d/%m/%Y")
+            self.date_input.setText(formatted_date)
+            self.check_date_changed.emit(formatted_date)
+
+    def get_next_available_date(self, base_date):
+        """Lấy ngày giao dịch kế tiếp trong dữ liệu Buy sau một ngày gốc."""
+        if base_date is None:
+            return None
+
+        target_date = pd.Timestamp(base_date).normalize()
+        next_date = None
+
+        for df in self.stock_data.allData.values():
+            if df is None or df.empty or 'Date' not in df.columns:
+                continue
+
+            date_series = pd.to_datetime(df['Date'], errors='coerce').dropna().dt.normalize()
+            future_dates = date_series[date_series > target_date]
+            if future_dates.empty:
+                continue
+
+            symbol_next = future_dates.min()
+            if next_date is None or symbol_next < next_date:
+                next_date = symbol_next
+
+        return next_date
 
     def _on_show_chart_clicked(self):
         """Mở biểu đồ Plotly cho symbol của dòng được bấm Show"""
@@ -401,6 +455,12 @@ class BuyScannerWindow(QMainWindow):
 
             for symbol in self._symbol_order:
                 self._upsert_symbol_column(symbol, self._symbol_results[symbol])
+
+            self._update_score_ratio_view()
+
+            normalized_date_text = target_date.strftime("%d/%m/%Y")
+            self.date_input.setText(normalized_date_text)
+            self.check_date_changed.emit(normalized_date_text)
 
             if self._symbol_order:
                 logger.info(

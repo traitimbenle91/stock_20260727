@@ -52,6 +52,7 @@ class DataFetcherThread(QThread):
 class StockDataManager:
 	def __init__(self):
 		self.symbols = []
+		self.codes = {}
 
 	def load_symbols(self, filepath="backup/syb_scan.csv", default=None, sybs=None):
 		"""Load danh sách symbols, ưu tiên sybs truyền vào, nếu không thì đọc từ 1 file CSV."""
@@ -61,8 +62,11 @@ class StockDataManager:
 
 		try:
 			df = pd.read_csv(filepath)
-			raw_symbols = df["syb"].astype(str).str.strip().str.upper().tolist()
+			df["syb"] = df["syb"].astype(str).str.strip().str.upper()
+			raw_symbols = df["syb"].tolist()
 			self.symbols = list(dict.fromkeys(raw_symbols))
+			if "code" in df.columns:
+				self.codes = dict(zip(df["syb"], df["code"]))
 		except Exception as e:
 			logger.error(f"Error loading symbols from {filepath}: {e}")
 			self.symbols = default if default is not None else ["CTG", "PFL", "VCT"]

@@ -20,6 +20,7 @@ from PyQt6.QtGui import QColor, QFont
 from ststock.StockData import StockData
 from indicator.indicators import add_ema, add_volume_ma
 from utils.logger import get_logger
+from config import CODE_COLORS
 
 logger = get_logger(__name__)
 
@@ -112,6 +113,7 @@ class BuyScannerWindow(QMainWindow):
         self._sort_state = 0  # 0=mặc định, 1=giảm dần, 2=tăng dần
         self._symbol_results = {}
         self._symbol_order = []
+        self.codes = {}
 
         self.metric_labels = [
             'Syb',
@@ -271,6 +273,12 @@ class BuyScannerWindow(QMainWindow):
         for row, item_text in enumerate(items):
             item = QTableWidgetItem(item_text)
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            if row == 0:
+                code = self.codes.get(symbol, 0)
+                rgb = CODE_COLORS[code] if 0 <= code < len(CODE_COLORS) else CODE_COLORS[1 + (code % (len(CODE_COLORS) - 1))]
+                if rgb is not None:
+                    item.setBackground(QColor(*rgb))
 
             # Highlight ô tổng điểm cao
             if row == 7 and data['total_points'] >= 5:

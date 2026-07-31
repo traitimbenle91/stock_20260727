@@ -52,6 +52,7 @@ class MainScannerWindow(QMainWindow):
         self.buy_scanner_window.symbols = symbols
         self.hold_scanner_window.symbols = symbols
         self.sell_scanner_window.symbols = symbols
+        self.buy_scanner_window.codes = self.stock_data_manager.codes
 
         self.refresh_btn.clicked.connect(self.on_refresh_clicked)
         self.save_btn.clicked.connect(self.on_save_clicked)

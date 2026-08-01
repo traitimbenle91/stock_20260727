@@ -55,7 +55,7 @@ class ResultScannerWindow(QMainWindow):
 		vertical_header = self.table.verticalHeader()
 		horizontal_header = self.table.horizontalHeader()
 		if vertical_header is not None:
-			vertical_header.setDefaultSectionSize(30)
+			vertical_header.setDefaultSectionSize(26)
 			vertical_header.setMinimumWidth(130)
 			vertical_header.setMaximumWidth(160)
 			vertical_header.sectionClicked.connect(self._on_vertical_header_clicked)

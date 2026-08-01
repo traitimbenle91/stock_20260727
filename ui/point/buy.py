@@ -143,7 +143,7 @@ class BuyScannerWindow(QMainWindow):
         vertical_header = self.table.verticalHeader()
         horizontal_header = self.table.horizontalHeader()
         if vertical_header is not None:
-            vertical_header.setDefaultSectionSize(30)
+            vertical_header.setDefaultSectionSize(26)
             vertical_header.setMinimumWidth(130)
             vertical_header.setMaximumWidth(160)
             vertical_header.sectionClicked.connect(self._on_vertical_header_clicked)
@@ -297,6 +297,7 @@ class BuyScannerWindow(QMainWindow):
         if show_btn is None:
             show_btn = QPushButton('Show')
             show_btn.setFixedWidth(48)
+            show_btn.setFixedHeight(22)
             show_btn.clicked.connect(self._on_show_chart_clicked)
             self.table.setCellWidget(chart_row, col_pos, show_btn)
         show_btn.setProperty('symbol', symbol)

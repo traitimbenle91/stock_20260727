@@ -1,13 +1,16 @@
 import sys
+import importlib
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QCheckBox
 
 from indicator.indicators import add_ema, add_volume_ma
 from ststock.StockDataManager import StockDataManager
-from ui.point.buy import BuyScannerWindow, calculate_scores
-from ui.point.hold import HoldScannerWindow
-from ui.point.sell import SellScannerWindow
+from .point.buy import BuyScannerWindow, calculate_scores
+from .point.hold import HoldScannerWindow
+from .point.sell import SellScannerWindow
 from utils.logger import get_logger
+
+result_window = importlib.import_module("ui.point.result")
 
 logger = get_logger(__name__)
 
@@ -44,6 +47,7 @@ class MainScannerWindow(QMainWindow):
         self.buy_scanner_window = BuyScannerWindow()
         self.hold_scanner_window = HoldScannerWindow()
         self.sell_scanner_window = SellScannerWindow()
+        self.result_scanner_window = result_window.ResultScannerWindow()
 
         self.stock_data_manager = StockDataManager()
 
@@ -52,6 +56,7 @@ class MainScannerWindow(QMainWindow):
         self.buy_scanner_window.symbols = symbols
         self.hold_scanner_window.symbols = symbols
         self.sell_scanner_window.symbols = symbols
+        self.result_scanner_window.symbols = symbols
         self.buy_scanner_window.codes = self.stock_data_manager.codes
 
         self.refresh_btn.clicked.connect(self.on_refresh_clicked)
@@ -60,24 +65,35 @@ class MainScannerWindow(QMainWindow):
         self.buy_scanner_window.sort_order_changed.connect(self._on_buy_sort_order_changed)
         self.buy_scanner_window.check_date_changed.connect(self._on_buy_check_date_changed)
         self.hold_scanner_window.check_date_changed.connect(self._on_hold_check_date_changed)
+        self.sell_scanner_window.check_date_changed.connect(self._on_sell_check_date_changed)
         self.hold_scanner_window._get_next_b_date = self.buy_scanner_window.get_next_available_date
         self.hold_scanner_window._get_buy_check_date = lambda: self.buy_scanner_window.date_input.text().strip()
         self.sell_scanner_window._get_next_h_date = self.hold_scanner_window.get_next_available_date
         self.sell_scanner_window._get_hold_check_date = lambda: self.hold_scanner_window.date_input.text().strip()
+        self.result_scanner_window.configure_sources(
+            symbols=symbols,
+            buy_stock_data=self.buy_scanner_window.stock_data,
+            sell_stock_data=self.sell_scanner_window.stock_data,
+            get_buy_check_date=lambda: self.buy_scanner_window.date_input.text().strip(),
+            get_sell_check_date=lambda: self.sell_scanner_window.date_input.text().strip(),
+        )
 
         # Lấy nội dung scanner và gắn vào cửa sổ chính để hiển thị bảng
         self.buy_content = self.buy_scanner_window.takeCentralWidget()
         self.hold_content = self.hold_scanner_window.takeCentralWidget()
         self.sell_content = self.sell_scanner_window.takeCentralWidget()
+        self.result_content = self.result_scanner_window.takeCentralWidget()
         main_layout.addWidget(self.buy_content)
         main_layout.addWidget(self.hold_content)
         main_layout.addWidget(self.sell_content)
+        main_layout.addWidget(self.result_content)
 
         self._is_syncing_bars = False
         self._scrollbars = {
             "B": self.buy_scanner_window.table.horizontalScrollBar(),
             "H": self.hold_scanner_window.table.horizontalScrollBar(),
             "S": self.sell_scanner_window.table.horizontalScrollBar(),
+            "R": self.result_scanner_window.table.horizontalScrollBar(),
         }
         for source_key, scrollbar in self._scrollbars.items():
             scrollbar.valueChanged.connect(
@@ -167,19 +183,26 @@ class MainScannerWindow(QMainWindow):
         if self.follow_b_checkbox.isChecked():
             self.hold_scanner_window.apply_external_order(ordered_symbols)
             self.sell_scanner_window.apply_external_order(ordered_symbols)
+            self.result_scanner_window.apply_external_order(ordered_symbols)
 
     def _on_buy_check_date_changed(self, date_text):
         """Khi ngày check của B đổi, cập nhật ngày kế tiếp cho H nếu đang bật Auto Next B."""
         if self.hold_scanner_window.auto_next_b_checkbox.isChecked() and self.hold_scanner_window.sync_to_next_buy_date(date_text):
             self.hold_scanner_window.on_check_date(skip_auto_sync=True)
+        self.result_scanner_window.refresh_results()
 
     def _on_hold_check_date_changed(self, date_text):
         """Khi ngày check của H đổi, cập nhật ngày kế tiếp cho S nếu đang bật Auto Next H."""
         if self.sell_scanner_window.auto_next_h_checkbox.isChecked() and self.sell_scanner_window.sync_to_next_hold_date(date_text):
             self.sell_scanner_window.on_check_date(skip_auto_sync=True)
 
+    def _on_sell_check_date_changed(self, _date_text):
+        """Khi ngày check của S đổi, cập nhật bảng R."""
+        self.result_scanner_window.refresh_results()
+
     def _on_fetch_data_finished(self):
         self.buy_scanner_window.on_fetch_finished()
+        self.result_scanner_window.refresh_results()
         self.on_refresh_finished()
 
     def on_refresh_finished(self):

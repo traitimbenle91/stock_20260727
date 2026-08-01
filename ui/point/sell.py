@@ -58,6 +58,7 @@ def calculate_sell_scores(symbol, row_t_minus_1, row_t):
 
 class SellScannerWindow(QMainWindow):
 	fetch_completed = pyqtSignal()
+	check_date_changed = pyqtSignal(str)
 
 	def __init__(self):
 		super().__init__()
@@ -289,7 +290,9 @@ class SellScannerWindow(QMainWindow):
 				latest_date = symbol_latest
 
 		if latest_date is not None:
-			self.date_input.setText(latest_date.strftime("%d/%m/%Y"))
+			formatted_date = latest_date.strftime("%d/%m/%Y")
+			self.date_input.setText(formatted_date)
+			self.check_date_changed.emit(formatted_date)
 
 	def _on_auto_next_h_toggled(self, checked):
 		if checked and self.sync_to_next_hold_date():
@@ -373,6 +376,10 @@ class SellScannerWindow(QMainWindow):
 
 			for symbol in self._symbol_order:
 				self._upsert_symbol_column(symbol, self._symbol_results[symbol])
+
+			normalized_date_text = target_date.strftime("%d/%m/%Y")
+			self.date_input.setText(normalized_date_text)
+			self.check_date_changed.emit(normalized_date_text)
 
 			if self._symbol_order:
 				logger.info(

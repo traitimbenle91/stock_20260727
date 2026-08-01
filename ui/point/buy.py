@@ -52,6 +52,8 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     prev_vol = float(row_t_minus_1['Volume'])
     curr_vol = float(row_t['Volume'])
     vol_vs_t_minus_1 = 0.0 if prev_vol == 0 else ((curr_vol - prev_vol) / prev_vol) * 100
+    vma20 = float(row_t['VMA20'])
+    vol_vs_ma20 = 0.0 if vma20 == 0 else ((curr_vol - vma20) / vma20) * 100
 
     open_price = float(row_t['Open'])
     close_price = float(row_t['Close'])
@@ -75,6 +77,7 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'total_points': total_points,
         'pct_change': pct_change,
         'vol_vs_t_minus_1': vol_vs_t_minus_1,
+        'vol_vs_ma20': vol_vs_ma20,
         'price_o_vs_c': price_o_vs_c,
         'price_h_vs_l': price_h_vs_l
     }
@@ -126,6 +129,7 @@ class BuyScannerWindow(QMainWindow):
             'T: Vol<VMA20',
             'Tổng Điểm',
             'Vol: T_vs_T-1',
+            'Vol: vs_ma20',
             'Price: H_vs_L',
             'Price: C_vs_O',
             'Price: T_vs_T-1',
@@ -179,6 +183,7 @@ class BuyScannerWindow(QMainWindow):
 
         self.hide_t_minus_1_checkbox = QCheckBox("Ẩn T-1")
         self.hide_t_minus_1_checkbox.toggled.connect(self._toggle_t_minus_1_rows)
+        self.hide_t_minus_1_checkbox.setChecked(True)
 
         self.score_ratio_view = QLineEdit()
         self.score_ratio_view.setReadOnly(True)
@@ -280,6 +285,7 @@ class BuyScannerWindow(QMainWindow):
             str(data['T_vol']),
             str(data['total_points']),
             f"{float(data.get('vol_vs_t_minus_1', 0.0)):.2f}%",
+            f"{float(data.get('vol_vs_ma20', 0.0)):.2f}%",
             f"{float(data.get('price_h_vs_l', 0.0)):.2f}%",
             f"{float(data.get('price_o_vs_c', 0.0)):.2f}%",
             f"{float(data.get('pct_change', 0.0)):.2f}%"
@@ -300,12 +306,20 @@ class BuyScannerWindow(QMainWindow):
                 item.setBackground(QColor(200, 255, 200))  # Light green
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
-             # Highlight hàng Price: H_vs_L nếu biên độ >= 3%
-            if row == 9 and float(data.get('price_h_vs_l', 0.0)) >= 3:
+            
+            # Highlight hàng vol: vol_vs_ma20 nếu biên độ >= -10%
+            if row == 9 and float(data.get('vol_vs_ma20', 0.0)) >= -5:
                 item.setBackground(QColor(255, 120, 120))
 
+            # Highlight hàng Price: H_vs_L nếu biên độ >= 4%
+            if row == 10 and float(data.get('price_h_vs_l', 0.0)) >= 3:
+                item.setBackground(QColor(255, 120, 120))
+
+
+            
+
             # Highlight hàng Price: T_vs_T-1 nếu tăng mạnh
-            if row == 11 and float(data.get('pct_change', 0.0)) >= 3:
+            if row == 12 and float(data.get('pct_change', 0.0)) >= 3:
                 item.setBackground(QColor(255, 120, 120))
 
             self.table.setItem(row, col_pos, item)

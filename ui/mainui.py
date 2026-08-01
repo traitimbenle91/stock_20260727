@@ -37,6 +37,8 @@ class MainScannerWindow(QMainWindow):
         self.save_btn = QPushButton("Lưu tất cả")
         self.follow_b_checkbox = QCheckBox("Follow B")
         self.combine_bars_checkbox = QCheckBox("Combine bars")
+        self.follow_b_checkbox.setChecked(True)
+        self.combine_bars_checkbox.setChecked(True)
         action_layout.addWidget(self.refresh_btn)
         action_layout.addWidget(self.save_btn)
         action_layout.addWidget(self.follow_b_checkbox)

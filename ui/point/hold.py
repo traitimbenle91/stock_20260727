@@ -134,6 +134,7 @@ class HoldScannerWindow(QMainWindow):
 
 		self.auto_next_b_checkbox = QCheckBox("Auto Next B")
 		self.auto_next_b_checkbox.toggled.connect(self._on_auto_next_b_toggled)
+		self.auto_next_b_checkbox.setChecked(True)
 
 		top_layout.addWidget(date_label)
 		top_layout.addWidget(self.prev_date_btn)

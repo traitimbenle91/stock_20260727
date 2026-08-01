@@ -133,6 +133,7 @@ class SellScannerWindow(QMainWindow):
 
 		self.auto_next_h_checkbox = QCheckBox("Auto Next H")
 		self.auto_next_h_checkbox.toggled.connect(self._on_auto_next_h_toggled)
+		self.auto_next_h_checkbox.setChecked(True)
 
 		top_layout.addWidget(date_label)
 		top_layout.addWidget(self.prev_date_btn)

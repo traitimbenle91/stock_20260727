@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QTableWidget,
     QTableWidgetItem,
+    QCheckBox,
     QGroupBox,
     QSizePolicy,
     QVBoxLayout,
@@ -176,6 +177,9 @@ class BuyScannerWindow(QMainWindow):
         self.check_date_btn.setMaximumWidth(80)
         self.check_date_btn.clicked.connect(self.on_check_date)
 
+        self.hide_t_minus_1_checkbox = QCheckBox("Ẩn T-1")
+        self.hide_t_minus_1_checkbox.toggled.connect(self._toggle_t_minus_1_rows)
+
         self.score_ratio_view = QLineEdit()
         self.score_ratio_view.setReadOnly(True)
         self.score_ratio_view.setMaximumWidth(220)
@@ -186,6 +190,7 @@ class BuyScannerWindow(QMainWindow):
         top_layout.addWidget(self.date_input)
         top_layout.addWidget(self.next_date_btn)
         top_layout.addWidget(self.check_date_btn)
+        top_layout.addWidget(self.hide_t_minus_1_checkbox)
         top_layout.addWidget(self.score_ratio_view)
         top_layout.addStretch()
 
@@ -203,6 +208,16 @@ class BuyScannerWindow(QMainWindow):
         header_height = self.table.horizontalHeader().height() if self.table.horizontalHeader() else 0
         frame = self.table.frameWidth() * 2
         self.table.setFixedHeight(rows_height + header_height + frame + 2)
+    
+    def _toggle_t_minus_1_rows(self, checked):
+        """Ẩn/hiện nhóm hàng T-1 theo trạng thái checkbox."""
+        t_minus_1_labels = ['T-1: Nến Đỏ', 'T-1: <EMA10', 'T-1: Vol<VMA20']
+        for label in t_minus_1_labels:
+            if label in self.metric_labels:
+                row_idx = self.metric_labels.index(label)
+                self.table.setRowHidden(row_idx, checked)
+        
+        self._fit_table_height()
     
     def add_row(self, data):
         """Update hoặc thêm 1 cột (mỗi cột là 1 symbol) trong bảng transpose"""

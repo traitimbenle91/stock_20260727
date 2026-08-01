@@ -300,6 +300,10 @@ class BuyScannerWindow(QMainWindow):
                 item.setBackground(QColor(200, 255, 200))  # Light green
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
+             # Highlight hàng Price: H_vs_L nếu biên độ >= 3%
+            if row == 9 and float(data.get('price_h_vs_l', 0.0)) >= 3:
+                item.setBackground(QColor(255, 120, 120))
+
             # Highlight hàng Price: T_vs_T-1 nếu tăng mạnh
             if row == 11 and float(data.get('pct_change', 0.0)) >= 3:
                 item.setBackground(QColor(255, 120, 120))

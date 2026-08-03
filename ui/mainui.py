@@ -57,7 +57,7 @@ class MainScannerWindow(QMainWindow):
         self.stock_data_manager = StockDataManager()
 
         # Load symbols 1 lần duy nhất từ 1 file CSV, gán cho cả 3 bảng
-        self.stock_data_manager.load_symbols('backup/syb_scan_code.csv', default=['CTG', 'PFL', 'VCT'])
+        self.stock_data_manager.load_symbols('backup/syb_scan.csv', default=['CTG', 'PFL', 'VCT'])
         self.buy_scanner_window.symbols = self.stock_data_manager.symbols
         self.hold_scanner_window.symbols = self.stock_data_manager.symbols
         self.sell_scanner_window.symbols = self.stock_data_manager.symbols

@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,
 from indicator.indicators import add_ema, add_volume_ma
 from ststock.StockDataManager import StockDataManager
 from .point.buy import BuyScannerWindow, calculate_scores
-from .point.hold import HoldScannerWindow
-from .point.sell import SellScannerWindow
+from .point.hold import HoldScannerWindow, calculate_hold_scores
+from .point.sell import SellScannerWindow, calculate_sell_scores
 from utils.logger import get_logger
 
 result_window = importlib.import_module("ui.point.result")
@@ -37,12 +37,15 @@ class MainScannerWindow(QMainWindow):
         self.save_btn = QPushButton("Lưu tất cả")
         self.follow_b_checkbox = QCheckBox("Follow B")
         self.combine_bars_checkbox = QCheckBox("Combine bars")
+        self.hide_hs_checkbox = QCheckBox("Hide H&S")
         self.follow_b_checkbox.setChecked(True)
         self.combine_bars_checkbox.setChecked(True)
+        self.hide_hs_checkbox.setChecked(True)
         action_layout.addWidget(self.refresh_btn)
         action_layout.addWidget(self.save_btn)
         action_layout.addWidget(self.follow_b_checkbox)
         action_layout.addWidget(self.combine_bars_checkbox)
+        action_layout.addWidget(self.hide_hs_checkbox)
         action_layout.addStretch()
         main_layout.addLayout(action_layout)
 
@@ -54,16 +57,17 @@ class MainScannerWindow(QMainWindow):
         self.stock_data_manager = StockDataManager()
 
         # Load symbols 1 lần duy nhất từ 1 file CSV, gán cho cả 3 bảng
-        symbols = self.stock_data_manager.load_symbols('backup/syb_scan.csv', default=['CTG', 'PFL', 'VCT'])
-        self.buy_scanner_window.symbols = symbols
-        self.hold_scanner_window.symbols = symbols
-        self.sell_scanner_window.symbols = symbols
-        self.result_scanner_window.symbols = symbols
-        self.buy_scanner_window.codes = self.stock_data_manager.codes
+        self.stock_data_manager.load_symbols('backup/syb_scan_code.csv', default=['CTG', 'PFL', 'VCT'])
+        self.buy_scanner_window.symbols = self.stock_data_manager.symbols
+        self.hold_scanner_window.symbols = self.stock_data_manager.symbols
+        self.sell_scanner_window.symbols = self.stock_data_manager.symbols
+        self.result_scanner_window.symbols = self.stock_data_manager.symbols
+        # self.buy_scanner_window.codes = self.stock_data_manager.symbols
 
         self.refresh_btn.clicked.connect(self.on_refresh_clicked)
         self.save_btn.clicked.connect(self.on_save_clicked)
         self.combine_bars_checkbox.toggled.connect(self._on_combine_bars_toggled)
+        self.hide_hs_checkbox.toggled.connect(self._on_hide_hs_toggled)
         self.buy_scanner_window.sort_order_changed.connect(self._on_buy_sort_order_changed)
         self.buy_scanner_window.check_date_changed.connect(self._on_buy_check_date_changed)
         self.hold_scanner_window.check_date_changed.connect(self._on_hold_check_date_changed)
@@ -72,8 +76,13 @@ class MainScannerWindow(QMainWindow):
         self.hold_scanner_window._get_buy_check_date = lambda: self.buy_scanner_window.date_input.text().strip()
         self.sell_scanner_window._get_next_h_date = self.hold_scanner_window.get_next_available_date
         self.sell_scanner_window._get_hold_check_date = lambda: self.hold_scanner_window.date_input.text().strip()
+        # Hold và Sell dùng chung stock_data với Buy — dữ liệu OHLCV tải 1 lần duy nhất
+        # Phải gán TRƯỚC configure_sources để result_scanner lưu đúng tham chiếu
+        self.hold_scanner_window.stock_data = self.buy_scanner_window.stock_data
+        self.sell_scanner_window.stock_data = self.buy_scanner_window.stock_data
+
         self.result_scanner_window.configure_sources(
-            symbols=symbols,
+            symbols=self.stock_data_manager.symbols,
             buy_stock_data=self.buy_scanner_window.stock_data,
             sell_stock_data=self.sell_scanner_window.stock_data,
             get_buy_check_date=lambda: self.buy_scanner_window.date_input.text().strip(),
@@ -90,6 +99,10 @@ class MainScannerWindow(QMainWindow):
         main_layout.addWidget(self.sell_content)
         main_layout.addWidget(self.result_content)
 
+        # Áp dụng trạng thái mặc định ẩn bảng H và S
+        self.hold_content.setVisible(not self.hide_hs_checkbox.isChecked())
+        self.sell_content.setVisible(not self.hide_hs_checkbox.isChecked())
+
         self._is_syncing_bars = False
         self._scrollbars = {
             "B": self.buy_scanner_window.table.horizontalScrollBar(),
@@ -104,6 +117,10 @@ class MainScannerWindow(QMainWindow):
 
         # Initial load do mainui điều phối
         self.on_refresh_clicked()
+
+    def _on_hide_hs_toggled(self, checked):
+        self.hold_content.setVisible(not checked)
+        self.sell_content.setVisible(not checked)
 
     def _on_combine_bars_toggled(self, checked):
         if not checked:
@@ -153,12 +170,9 @@ class MainScannerWindow(QMainWindow):
         self.refresh_btn.setEnabled(False)
         self.refresh_btn.setText("Đang tải...")
 
-        # Refresh Sell UI theo logic riêng trong sell.py
         self.hold_scanner_window.refresh_data()
         self.sell_scanner_window.refresh_data()
 
-        # Giữ nguyên bảng hiện tại; mỗi symbol sẽ được update dần khi thread trả data.
-        # Chỉ reset hoàn toàn ở lần tải đầu tiên.
         if self.buy_scanner_window._is_first_load:
             self.buy_scanner_window._sort_state = 0
             self.buy_scanner_window._symbol_results = {}
@@ -171,14 +185,28 @@ class MainScannerWindow(QMainWindow):
 
         self.fetch_thread = self.stock_data_manager.create_fetch_thread(
             self.buy_scanner_window.stock_data,
-            score_fn=calculate_scores,
+            score_configs=[
+                ('B', calculate_scores),
+                ('H', calculate_hold_scores),
+                ('S', calculate_sell_scores),
+            ],
             mode=mode,
             setup_fn=_buy_setup_fn,
             symbols=self.buy_scanner_window.symbols,
         )
-        self.fetch_thread.progress.connect(self.buy_scanner_window.add_row)
+        self.hold_scanner_window.fetch_thread = self.fetch_thread
+        self.sell_scanner_window.fetch_thread = self.fetch_thread
+        self.fetch_thread.progress.connect(self._on_fetch_progress)
         self.fetch_thread.finished.connect(self._on_fetch_data_finished)
         self.fetch_thread.start()
+
+    def _on_fetch_progress(self, tag, data):
+        if tag == 'B':
+            self.buy_scanner_window.add_row(data)
+        elif tag == 'H':
+            self.hold_scanner_window.add_row(data)
+        elif tag == 'S':
+            self.sell_scanner_window.add_row(data)
 
     def _on_buy_sort_order_changed(self, ordered_symbols):
         """Khi bảng B sort theo Tổng Điểm, nếu Follow B được bật thì H và S cũng theo."""
@@ -204,6 +232,8 @@ class MainScannerWindow(QMainWindow):
 
     def _on_fetch_data_finished(self):
         self.buy_scanner_window.on_fetch_finished()
+        self.hold_scanner_window.on_fetch_finished()
+        self.sell_scanner_window.on_fetch_finished()
         self.result_scanner_window.refresh_results()
         self.on_refresh_finished()
 

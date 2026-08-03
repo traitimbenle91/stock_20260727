@@ -58,7 +58,6 @@ class ResultScannerWindow(QMainWindow):
 			vertical_header.setDefaultSectionSize(26)
 			vertical_header.setMinimumWidth(130)
 			vertical_header.setMaximumWidth(160)
-			vertical_header.sectionClicked.connect(self._on_vertical_header_clicked)
 		if horizontal_header is not None:
 			horizontal_header.setVisible(False)
 			horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
@@ -91,8 +90,7 @@ class ResultScannerWindow(QMainWindow):
 		main_layout.addWidget(group_box)
 		main_layout.addStretch()
 
-		self.symbols = []
-		self._sort_state = 0
+		self.symbols = {}
 		self._symbol_results = {}
 		self._symbol_order = []
 
@@ -117,7 +115,7 @@ class ResultScannerWindow(QMainWindow):
 		get_buy_check_date: Callable[[], str],
 		get_sell_check_date: Callable[[], str],
 	):
-		self.symbols = symbols or []
+		self.symbols = symbols or {}
 		self._buy_stock_data = buy_stock_data
 		self._sell_stock_data = sell_stock_data
 		self._get_buy_check_date = get_buy_check_date
@@ -169,7 +167,12 @@ class ResultScannerWindow(QMainWindow):
 		date_results = {}
 		date_order = []
 
-		for symbol in self.symbols:
+		symbols_iter = (
+			[(code, syb) for code, sybs in self.symbols.items() for syb in sybs]
+			if isinstance(self.symbols, dict)
+			else [(0, syb) for syb in self.symbols]
+		)
+		for code, symbol in symbols_iter:
 			close_buy = self._get_close_by_date(self._buy_stock_data, symbol, buy_date)
 			close_sell = self._get_close_by_date(self._sell_stock_data, symbol, sell_date)
 			if close_buy is None or close_sell is None or close_sell == 0:
@@ -178,12 +181,13 @@ class ResultScannerWindow(QMainWindow):
 			result_pct = ((close_sell - close_buy) / close_sell) * 100
 			result = {
 				"symbol": symbol,
+				"code": code,
 				"result": result_pct,
 			}
-			date_results[symbol] = result
-			date_order.append(symbol)
+			key = (code, symbol)
+			date_results[key] = result
+			date_order.append(key)
 
-		self._sort_state = 0
 		self._symbol_results = date_results
 		self._symbol_order = date_order
 
@@ -191,8 +195,14 @@ class ResultScannerWindow(QMainWindow):
 		self.table.setColumnCount(0)
 		self.table.setHorizontalHeaderLabels([])
 
-		for symbol in self._symbol_order:
-			self._upsert_symbol_column(symbol, self._symbol_results[symbol])
+		for key in self._symbol_order:
+			code, symbol = key
+			self._upsert_symbol_column(symbol, self._symbol_results[key], code)
+
+		# Đảm bảo horizontal header vẫn ẩn sau khi rebuild cột
+		h = self.table.horizontalHeader()
+		if h is not None:
+			h.setVisible(False)
 
 		if self._symbol_order:
 			logger.info(
@@ -201,11 +211,12 @@ class ResultScannerWindow(QMainWindow):
 		else:
 			logger.warning(f"Không có dữ liệu Result cho B={buy_date_text}, S={sell_date_text}.")
 
-	def _upsert_symbol_column(self, symbol, data):
+	def _upsert_symbol_column(self, symbol, data, code=0):
+		key = (code, symbol)
 		existing_col = -1
 		for col in range(self.table.columnCount()):
 			item = self.table.item(0, col)
-			if item and item.text() == symbol:
+			if item and item.data(Qt.ItemDataRole.UserRole) == key:
 				existing_col = col
 				break
 
@@ -226,62 +237,41 @@ class ResultScannerWindow(QMainWindow):
 			item = QTableWidgetItem(item_text)
 			item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
+			if row == 0:
+				item.setData(Qt.ItemDataRole.UserRole, key)
+				from config import CODE_COLORS
+				rgb = CODE_COLORS[code] if 0 <= code < len(CODE_COLORS) else None
+				if rgb is not None:
+					item.setBackground(QColor(*rgb))
+
 			if row == 1:
 				result_val = float(data.get("result", 0.0))
 				if result_val >= 0:
-					item.setBackground(QColor(200, 255, 200))
+					item.setBackground(QColor(173, 216, 230))
 				else:
 					item.setBackground(QColor(255, 220, 220))
 
 			self.table.setItem(row, col_pos, item)
 
-	def _on_vertical_header_clicked(self, row):
-		result_row = 1
-		if row != result_row:
-			return
-
-		self._sort_state = (self._sort_state + 1) % 3
-		self._apply_sort_order()
-
-	def _apply_sort_order(self):
-		if not self._symbol_order:
-			return
-
-		base_index = {syb: idx for idx, syb in enumerate(self._symbol_order)}
-
-		if self._sort_state == 0:
-			ordered_symbols = list(self._symbol_order)
-		elif self._sort_state == 1:
-			ordered_symbols = sorted(
-				self._symbol_order,
-				key=lambda syb: (-float(self._symbol_results.get(syb, {}).get("result", 0)), base_index[syb]),
-			)
-		else:
-			ordered_symbols = sorted(
-				self._symbol_order,
-				key=lambda syb: (float(self._symbol_results.get(syb, {}).get("result", 0)), base_index[syb]),
-			)
-
-		self.table.clearContents()
-		self.table.setColumnCount(0)
-		for symbol in ordered_symbols:
-			symbol_data = self._symbol_results.get(symbol)
-			if symbol_data is not None:
-				self._upsert_symbol_column(symbol, symbol_data)
-
-	def apply_external_order(self, ordered_symbols):
+	def apply_external_order(self, ordered_keys):
 		if not self._symbol_results:
 			return
 
 		self.table.clearContents()
 		self.table.setColumnCount(0)
-		for symbol in ordered_symbols:
-			symbol_data = self._symbol_results.get(symbol)
+		for key in ordered_keys:
+			code, symbol = key
+			symbol_data = self._symbol_results.get(key)
 			if symbol_data is not None:
-				self._upsert_symbol_column(symbol, symbol_data)
+				self._upsert_symbol_column(symbol, symbol_data, code)
 
-		for symbol in self._symbol_order:
-			if symbol not in ordered_symbols:
-				symbol_data = self._symbol_results.get(symbol)
+		for key in self._symbol_order:
+			if key not in ordered_keys:
+				code, symbol = key
+				symbol_data = self._symbol_results.get(key)
 				if symbol_data is not None:
-					self._upsert_symbol_column(symbol, symbol_data)
+					self._upsert_symbol_column(symbol, symbol_data, code)
+
+		h = self.table.horizontalHeader()
+		if h is not None:
+			h.setVisible(False)

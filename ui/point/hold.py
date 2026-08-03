@@ -78,9 +78,10 @@ class HoldScannerWindow(QMainWindow):
 
 		self.stock_data = StockData()
 		self._is_first_load = True
-		self._sort_state = 0
 		self._symbol_results = {}
 		self._symbol_order = []
+		self.fetch_thread: Optional[DataFetcherThread] = None
+		self.codes: dict = {}
 		self._get_next_b_date: Optional[Callable[[datetime], Optional[pd.Timestamp]]] = None
 		self._get_buy_check_date: Optional[Callable[[], str]] = None
 
@@ -104,7 +105,6 @@ class HoldScannerWindow(QMainWindow):
 			vertical_header.setDefaultSectionSize(26)
 			vertical_header.setMinimumWidth(130)
 			vertical_header.setMaximumWidth(160)
-			vertical_header.sectionClicked.connect(self._on_vertical_header_clicked)
 		if horizontal_header is not None:
 			horizontal_header.setVisible(False)
 			horizontal_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
@@ -150,7 +150,7 @@ class HoldScannerWindow(QMainWindow):
 		main_layout.addStretch()
 
 		# symbols sẽ được gán từ mainui.py
-		self.symbols = []
+		self.symbols = {}
 
 	def _fit_table_height(self):
 		vertical_header = self.table.verticalHeader()
@@ -160,40 +160,32 @@ class HoldScannerWindow(QMainWindow):
 		frame = self.table.frameWidth() * 2
 		self.table.setFixedHeight(rows_height + header_height + frame + 2)
 
-	def refresh_data(self):
-		"""Fetch/update dữ liệu và cập nhật dần từng cột symbol."""
-		self._sort_state = 0
+	def refresh_data(self) -> str:
+		"""Reset trạng thái bảng, trả về mode fetch ('initial'|'update'). Thread do mainui tạo."""
 		if self._is_first_load:
 			self._symbol_results = {}
 			self._symbol_order = []
 			self.table.clearContents()
 			self.table.setColumnCount(0)
-
 		mode = "initial" if self._is_first_load else "update"
 		self._is_first_load = False
-
-		self.fetch_thread = DataFetcherThread(self.symbols, self.stock_data, score_fn=calculate_hold_scores, mode=mode)
-		self.fetch_thread.progress.connect(self.add_row)
-		self.fetch_thread.finished.connect(self.on_fetch_finished)
-		self.fetch_thread.start()
+		return mode
 
 	def add_row(self, data):
 		symbol = data["symbol"]
-		self._symbol_results[symbol] = data
-		if symbol not in self._symbol_order:
-			self._symbol_order.append(symbol)
+		code = data.get("code", 0)
+		key = (code, symbol)
+		self._symbol_results[key] = data
+		if key not in self._symbol_order:
+			self._symbol_order.append(key)
+		self._upsert_symbol_column(symbol, data, code)
 
-		if self._sort_state != 0:
-			self._apply_sort_order()
-			return
-
-		self._upsert_symbol_column(symbol, data)
-
-	def _upsert_symbol_column(self, symbol, data):
+	def _upsert_symbol_column(self, symbol, data, code=0):
+		key = (code, symbol)
 		existing_col = -1
 		for col in range(self.table.columnCount()):
 			item = self.table.item(0, col)
-			if item and item.text() == symbol:
+			if item and item.data(Qt.ItemDataRole.UserRole) == key:
 				existing_col = col
 				break
 
@@ -215,62 +207,39 @@ class HoldScannerWindow(QMainWindow):
 		for row, item_text in enumerate(items):
 			item = QTableWidgetItem(item_text)
 			item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+			if row == 0:
+				item.setData(Qt.ItemDataRole.UserRole, key)
+				from config import CODE_COLORS
+				rgb = CODE_COLORS[code] if 0 <= code < len(CODE_COLORS) else None
+				if rgb is not None:
+					item.setBackground(QColor(*rgb))
 			if row == 3 and data["total_points"] >= 2:
 				item.setBackground(QColor(224, 255, 255))
 				item.setFont(QFont(None, 10, QFont.Weight.Bold))
 			self.table.setItem(row, col_pos, item)
 
-	def _on_vertical_header_clicked(self, row):
-		"""Click hàng Tổng Điểm để toggle sort theo cột symbol."""
-		total_row = 3
-		if row != total_row:
-			return
-
-		self._sort_state = (self._sort_state + 1) % 3
-		self._apply_sort_order()
-
-	def _apply_sort_order(self):
-		if not self._symbol_order:
-			return
-
-		base_index = {syb: idx for idx, syb in enumerate(self._symbol_order)}
-
-		if self._sort_state == 0:
-			ordered_symbols = list(self._symbol_order)
-		elif self._sort_state == 1:
-			ordered_symbols = sorted(
-				self._symbol_order,
-				key=lambda syb: (-float(self._symbol_results.get(syb, {}).get("total_points", 0)), base_index[syb]),
-			)
-		else:
-			ordered_symbols = sorted(
-				self._symbol_order,
-				key=lambda syb: (float(self._symbol_results.get(syb, {}).get("total_points", 0)), base_index[syb]),
-			)
-
-		self.table.clearContents()
-		self.table.setColumnCount(0)
-		for symbol in ordered_symbols:
-			symbol_data = self._symbol_results.get(symbol)
-			if symbol_data is not None:
-				self._upsert_symbol_column(symbol, symbol_data)
-
-	def apply_external_order(self, ordered_symbols):
-		"""Sắp xếp lại cột theo danh sách symbol từ bảng ngoài (e.g. B)."""
+	def apply_external_order(self, ordered_keys):
+		"""Sắp xếp lại cột theo danh sách (code, symbol) từ bảng ngoài (e.g. B)."""
 		if not self._symbol_results:
 			return
 		self.table.clearContents()
 		self.table.setColumnCount(0)
-		for symbol in ordered_symbols:
-			symbol_data = self._symbol_results.get(symbol)
+		for key in ordered_keys:
+			code, symbol = key
+			symbol_data = self._symbol_results.get(key)
 			if symbol_data is not None:
-				self._upsert_symbol_column(symbol, symbol_data)
-		# Append any symbols not in ordered_symbols
-		for symbol in self._symbol_order:
-			if symbol not in ordered_symbols:
-				symbol_data = self._symbol_results.get(symbol)
+				self._upsert_symbol_column(symbol, symbol_data, code)
+		# Append any keys not in ordered_keys
+		for key in self._symbol_order:
+			if key not in ordered_keys:
+				code, symbol = key
+				symbol_data = self._symbol_results.get(key)
 				if symbol_data is not None:
-					self._upsert_symbol_column(symbol, symbol_data)
+					self._upsert_symbol_column(symbol, symbol_data, code)
+
+		h = self.table.horizontalHeader()
+		if h is not None:
+			h.setVisible(False)
 
 	def on_fetch_finished(self):
 		self._set_check_date_to_latest_available()
@@ -363,7 +332,7 @@ class HoldScannerWindow(QMainWindow):
 
 		try:
 			check_date = datetime.strptime(date_text, "%d/%m/%Y")
-			if hasattr(self, "fetch_thread") and self.fetch_thread.isRunning():
+			if self.fetch_thread is not None and self.fetch_thread.isRunning():
 				logger.warning("Đang tải dữ liệu. Vui lòng chờ tải xong rồi Check ngày.")
 				return
 
@@ -371,7 +340,10 @@ class HoldScannerWindow(QMainWindow):
 			date_results = {}
 			date_order = []
 
-			for symbol in self.symbols:
+			symbols_iter = [
+				(code, syb) for code, sybs in self.symbols.items() for syb in sybs
+			]
+			for code, symbol in symbols_iter:
 				df = self.stock_data.allData.get(symbol)
 				if df is None or len(df) < 2:
 					continue
@@ -388,8 +360,10 @@ class HoldScannerWindow(QMainWindow):
 				row_t_minus_1 = df.iloc[idx_t - 1]
 				row_t = df.iloc[idx_t]
 				result = calculate_hold_scores(symbol, row_t_minus_1, row_t)
-				date_results[symbol] = result
-				date_order.append(symbol)
+				result["code"] = code
+				key = (code, symbol)
+				date_results[key] = result
+				date_order.append(key)
 
 			self._sort_state = 0
 			self._symbol_results = date_results
@@ -399,8 +373,13 @@ class HoldScannerWindow(QMainWindow):
 			self.table.setColumnCount(0)
 			self.table.setHorizontalHeaderLabels([])
 
-			for symbol in self._symbol_order:
-				self._upsert_symbol_column(symbol, self._symbol_results[symbol])
+			for key in self._symbol_order:
+				code, symbol = key
+				self._upsert_symbol_column(symbol, self._symbol_results[key], code)
+
+			h = self.table.horizontalHeader()
+			if h is not None:
+				h.setVisible(False)
 
 			normalized_date_text = target_date.strftime("%d/%m/%Y")
 			self.date_input.setText(normalized_date_text)

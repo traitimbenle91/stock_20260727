@@ -63,6 +63,10 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     price_o_vs_c = 0.0 if open_price == 0 else ((close_price - open_price) / open_price) * 100
     price_h_vs_l = 0.0 if low_price == 0 else ((high_price - low_price) / low_price) * 100
 
+    prev_open_price = float(row_t_minus_1['Open'])
+    prev_close_price = float(row_t_minus_1['Close'])
+    price_t_minus_1_c_vs_o = 0.0 if prev_close_price == 0 else ((prev_close_price - prev_open_price) / prev_close_price) * 100
+
     vol_ma20 = int(row_t['VMA20'])
 
     return {
@@ -79,7 +83,8 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'vol_vs_t_minus_1': vol_vs_t_minus_1,
         'vol_vs_ma20': vol_vs_ma20,
         'price_o_vs_c': price_o_vs_c,
-        'price_h_vs_l': price_h_vs_l
+        'price_h_vs_l': price_h_vs_l,
+        'price_t_minus_1_c_vs_o': price_t_minus_1_c_vs_o
     }
 class BuyScannerWindow(QMainWindow):
     fetch_completed = pyqtSignal()
@@ -103,21 +108,13 @@ class BuyScannerWindow(QMainWindow):
         group_layout.setContentsMargins(6, 6, 6, 6)
         group_layout.setSpacing(6)
         
-        # Title
-        # title = QLabel("Table")
-        # title_font = QFont()
-        # title_font.setPointSize(14)
-        # title_font.setBold(True)
-        # title.setFont(title_font)
-        # main_layout.addWidget(title)
-        
         # Khởi tạo StockData
         self.stock_data = StockData()
         self._is_first_load = True  # Flag để track lần đầu load
         self._sort_state = 0  # 0=mặc định, 1=giảm dần, 2=tăng dần
         self._symbol_results = {}
         self._symbol_order = []
-        self.codes = {}
+        # self.codes = {}
 
         self.metric_labels = [
             'Syb',
@@ -130,6 +127,7 @@ class BuyScannerWindow(QMainWindow):
             'Tổng Điểm',
             'Vol: T_vs_T-1',
             'Vol: vs_ma20',
+            'Price T-1: C_vs_O',
             'Price: H_vs_L',
             'Price: C_vs_O',
             'Price: T_vs_T-1',
@@ -205,7 +203,7 @@ class BuyScannerWindow(QMainWindow):
         main_layout.addStretch()
         
         # symbols sẽ được gán từ mainui.py
-        self.symbols = []
+        self.symbols = {}
 
     def _fit_table_height(self):
         """Đặt chiều cao bảng vừa đủ hiển thị toàn bộ hàng hiện có."""
@@ -225,19 +223,21 @@ class BuyScannerWindow(QMainWindow):
         self._fit_table_height()
     
     def add_row(self, data):
-        """Update hoặc thêm 1 cột (mỗi cột là 1 symbol) trong bảng transpose"""
+        """Update hoặc thêm 1 cột (mỗi cột là 1 (code, symbol)) trong bảng transpose"""
         symbol = data['symbol']
+        code = data.get('code', 0)
+        key = (code, symbol)
 
         # Lưu dữ liệu mới nhất để phục vụ sort/rebuild theo cột
-        self._symbol_results[symbol] = data
-        if symbol not in self._symbol_order:
-            self._symbol_order.append(symbol)
+        self._symbol_results[key] = data
+        if key not in self._symbol_order:
+            self._symbol_order.append(key)
 
         if self._sort_state != 0:
             self._apply_sort_order()
             return
 
-        self._upsert_symbol_column(symbol, data)
+        self._upsert_symbol_column(symbol, data, code)
         self._update_score_ratio_view()
 
     def _update_score_ratio_view(self):
@@ -255,13 +255,14 @@ class BuyScannerWindow(QMainWindow):
         ratio = (passing_symbols / total_symbols) * 100
         self.score_ratio_view.setText(f"{passing_symbols}/{total_symbols} ({ratio:.2f}%)")
 
-    def _upsert_symbol_column(self, symbol, data):
-        """Thêm/cập nhật một cột symbol vào bảng hiện tại"""
-        # Tìm xem symbol đã có trong cột nào chưa (row 0 là Syb)
+    def _upsert_symbol_column(self, symbol, data, code=0):
+        """Thêm/cập nhật một cột (code, symbol) vào bảng hiện tại"""
+        # Tìm cột theo cặp (code, symbol) lưu trong UserRole của row 0
         existing_col = -1
+        key = (code, symbol)
         for col in range(self.table.columnCount()):
             item = self.table.item(0, col)
-            if item and item.text() == symbol:
+            if item and item.data(Qt.ItemDataRole.UserRole) == key:
                 existing_col = col
                 break
 
@@ -286,6 +287,7 @@ class BuyScannerWindow(QMainWindow):
             str(data['total_points']),
             f"{float(data.get('vol_vs_t_minus_1', 0.0)):.2f}%",
             f"{float(data.get('vol_vs_ma20', 0.0)):.2f}%",
+            f"{float(data.get('price_t_minus_1_c_vs_o', 0.0)):.2f}%",
             f"{float(data.get('price_h_vs_l', 0.0)):.2f}%",
             f"{float(data.get('price_o_vs_c', 0.0)):.2f}%",
             f"{float(data.get('pct_change', 0.0)):.2f}%"
@@ -296,31 +298,32 @@ class BuyScannerWindow(QMainWindow):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
             if row == 0:
-                code = self.codes.get(symbol, 0)
+                item.setData(Qt.ItemDataRole.UserRole, (code, symbol))
                 rgb = CODE_COLORS[code] if 0 <= code < len(CODE_COLORS) else CODE_COLORS[1 + (code % (len(CODE_COLORS) - 1))]
                 if rgb is not None:
                     item.setBackground(QColor(*rgb))
 
             # Highlight ô tổng điểm cao
             if row == 7 and data['total_points'] >= 5:
-                item.setBackground(QColor(200, 255, 200))  # Light green
+                item.setBackground(QColor(173, 216, 230))  # light blue
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
             
             # Highlight hàng vol: vol_vs_ma20 nếu biên độ >= -10%
             if row == 9 and float(data.get('vol_vs_ma20', 0.0)) >= -5:
-                item.setBackground(QColor(255, 120, 120))
+                item.setBackground(QColor(255, 200, 150))
 
-            # Highlight hàng Price: H_vs_L nếu biên độ >= 4%
-            if row == 10 and float(data.get('price_h_vs_l', 0.0)) >= 3:
-                item.setBackground(QColor(255, 120, 120))
+            # Highlight hàng Price: H_vs_L nếu biên độ >= 3%
+            if row == 10 and float(data.get('price_t_minus_1_c_vs_o', 0.0)) <= -5:
+                item.setBackground(QColor(255, 200, 150))
 
-
-            
+            # Highlight hàng Price: H_vs_L nếu biên độ >= 3%
+            if row == 11 and float(data.get('price_h_vs_l', 0.0)) >= 4:
+                item.setBackground(QColor(255, 200, 150))
 
             # Highlight hàng Price: T_vs_T-1 nếu tăng mạnh
             if row == 12 and float(data.get('pct_change', 0.0)) >= 3:
-                item.setBackground(QColor(255, 120, 120))
+                item.setBackground(QColor(255, 200, 150))
 
             self.table.setItem(row, col_pos, item)
 
@@ -350,31 +353,36 @@ class BuyScannerWindow(QMainWindow):
             self._update_score_ratio_view()
             return
 
-        base_index = {syb: idx for idx, syb in enumerate(self._symbol_order)}
+        base_index = {key: idx for idx, key in enumerate(self._symbol_order)}
 
         if self._sort_state == 0:
-            ordered_symbols = list(self._symbol_order)
+            ordered_keys = list(self._symbol_order)
         elif self._sort_state == 1:
-            ordered_symbols = sorted(
+            ordered_keys = sorted(
                 self._symbol_order,
-                key=lambda syb: (-float(self._symbol_results.get(syb, {}).get('total_points', 0)), base_index[syb])
+                key=lambda k: (-float(self._symbol_results.get(k, {}).get('total_points', 0)), base_index[k])
             )
         else:
-            ordered_symbols = sorted(
+            ordered_keys = sorted(
                 self._symbol_order,
-                key=lambda syb: (float(self._symbol_results.get(syb, {}).get('total_points', 0)), base_index[syb])
+                key=lambda k: (float(self._symbol_results.get(k, {}).get('total_points', 0)), base_index[k])
             )
 
         self.table.clearContents()
         self.table.setColumnCount(0)
-        for symbol in ordered_symbols:
-            symbol_data = self._symbol_results.get(symbol)
+        for key in ordered_keys:
+            code, symbol = key
+            symbol_data = self._symbol_results.get(key)
             if symbol_data is not None:
-                self._upsert_symbol_column(symbol, symbol_data)
+                self._upsert_symbol_column(symbol, symbol_data, code)
+
+        h = self.table.horizontalHeader()
+        if h is not None:
+            h.setVisible(False)
 
         self._update_score_ratio_view()
 
-        self.sort_order_changed.emit(ordered_symbols)
+        self.sort_order_changed.emit(ordered_keys)
 
     def on_fetch_finished(self):
         """Hoàn tất fetch dữ liệu"""
@@ -467,7 +475,10 @@ class BuyScannerWindow(QMainWindow):
             date_results = {}
             date_order = []
 
-            for symbol in self.symbols:
+            symbols_iter = [
+                (code, syb) for code, sybs in self.symbols.items() for syb in sybs
+            ]
+            for code, symbol in symbols_iter:
                 df = self.stock_data.allData.get(symbol)
                 if df is None or len(df) < 2:
                     continue
@@ -487,9 +498,11 @@ class BuyScannerWindow(QMainWindow):
                 row_t_minus_1 = df.iloc[idx_t - 1]
                 row_t = df.iloc[idx_t]
                 result = calculate_scores(symbol, row_t_minus_1, row_t)
+                result['code'] = code
+                key = (code, symbol)
 
-                date_results[symbol] = result
-                date_order.append(symbol)
+                date_results[key] = result
+                date_order.append(key)
 
             self._sort_state = 0
             self._symbol_results = date_results
@@ -499,8 +512,13 @@ class BuyScannerWindow(QMainWindow):
             self.table.setColumnCount(0)
             self.table.setHorizontalHeaderLabels([])
 
-            for symbol in self._symbol_order:
-                self._upsert_symbol_column(symbol, self._symbol_results[symbol])
+            for key in self._symbol_order:
+                code, symbol = key
+                self._upsert_symbol_column(symbol, self._symbol_results[key], code)
+
+            h = self.table.horizontalHeader()
+            if h is not None:
+                h.setVisible(False)
 
             self._update_score_ratio_view()
 

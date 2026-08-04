@@ -313,17 +313,18 @@ class BuyScannerWindow(QMainWindow):
             if row == 9 and float(data.get('vol_vs_ma20', 0.0)) >= -5:
                 item.setBackground(QColor(255, 200, 150))
 
-            # Highlight hàng Price: H_vs_L nếu biên độ >= 3%
             if row == 10 and float(data.get('price_t_minus_1_c_vs_o', 0.0)) <= -5:
                 item.setBackground(QColor(255, 200, 150))
 
-            # Highlight hàng Price: H_vs_L nếu biên độ >= 3%
+            # Highlight hàng Price: H_vs_L nếu biên độ >= 4%
             if row == 11 and float(data.get('price_h_vs_l', 0.0)) >= 4:
                 item.setBackground(QColor(255, 200, 150))
 
             # Highlight hàng Price: T_vs_T-1 nếu tăng mạnh
-            if row == 12 and float(data.get('pct_change', 0.0)) >= 3:
+            if row == 13 and float(data.get('pct_change', 0.0)) >= 3:
                 item.setBackground(QColor(255, 200, 150))
+            if row == 13 and float(data.get('pct_change', 0.0)) < 0:
+                            item.setBackground(QColor(255, 200, 150))
 
             self.table.setItem(row, col_pos, item)
 

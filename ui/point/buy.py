@@ -44,9 +44,6 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     t_minus_1_bullish, t_minus_1_ema, t_minus_1_vol = get_score_t_minus_1(row_t_minus_1)
     t_bullish, t_ema, t_vol = get_score_t(row_t)
 
-    total_points = t_minus_1_bullish + t_minus_1_ema + t_minus_1_vol + \
-                   t_bullish + t_ema + t_vol
-
     prev_close = float(row_t_minus_1['Close'])
     curr_close = float(row_t['Close'])
     pct_change = 0.0 if prev_close == 0 else ((curr_close - prev_close) / prev_close) * 100
@@ -71,6 +68,14 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
     prev_close_price = float(row_t_minus_1['Close'])
     price_t_minus_1_c_vs_o = 0.0 if prev_close_price == 0 else ((prev_close_price - prev_open_price) / prev_close_price) * 100
 
+    price_cover_t_minus_1_vs_t = 1 if (
+        (prev_open_price > open_price > prev_close_price) or
+        (prev_open_price > close_price > prev_close_price)
+    ) else 0
+
+    total_points = t_minus_1_bullish + t_minus_1_ema + t_minus_1_vol + \
+                   t_bullish + t_ema + t_vol + price_cover_t_minus_1_vs_t
+
     vol_ma20 = int(row_t['VMA20'])
 
     return {
@@ -81,6 +86,7 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
         'T_bullish': t_bullish,
         'T_ema': t_ema,
         'T_vol': t_vol,
+        'price_cover_t_minus_1_vs_t': price_cover_t_minus_1_vs_t,
         'vol_ma20': vol_ma20,
         'total_points': total_points,
         'pct_change': pct_change,
@@ -129,6 +135,7 @@ class BuyScannerWindow(QMainWindow):
             'T: Nến Xanh',
             'T: <EMA10',
             'T: Vol<VMA20',
+            'Price cover: T-1_vs_T',
             'Tổng Điểm',
             'Vol: T_vs_T-1',
             'Vol: T-1_vs_ma20',
@@ -256,7 +263,7 @@ class BuyScannerWindow(QMainWindow):
         passing_symbols = sum(
             1
             for result in self._symbol_results.values()
-            if float(result.get('total_points', 0)) > 5
+            if float(result.get('total_points', 0)) > 6.5
         )
         ratio = (passing_symbols / total_symbols) * 100
         self.score_ratio_view.setText(f"{passing_symbols}/{total_symbols} ({ratio:.2f}%)")
@@ -290,6 +297,7 @@ class BuyScannerWindow(QMainWindow):
             str(data['T_bullish']),
             str(data['T_ema']),
             str(data['T_vol']),
+            str(data.get('price_cover_t_minus_1_vs_t', 0)),
             str(data['total_points']),
             f"{float(data.get('vol_vs_t_minus_1', 0.0)):.2f}%",
             f"{float(data.get('vol_t_minus_1_vs_ma20', 0.0)):.2f}%",
@@ -311,7 +319,7 @@ class BuyScannerWindow(QMainWindow):
                     item.setBackground(QColor(*rgb))
 
             # Highlight ô tổng điểm cao
-            if row == 7 and data['total_points'] >= 5:
+            if row == 8 and data['total_points'] >= 6:
                 item.setBackground(LIGHT_BLUE_COLOR)  # light blue
                 item.setFont(QFont(None, 10, QFont.Weight.Bold))
 
@@ -321,25 +329,25 @@ class BuyScannerWindow(QMainWindow):
                 # item.setBackground(QColor(255, 200, 150))
 
             # Highlight hàng vol: vol_t_minus_1_vs_ma20
-            if row == 9 and float(data.get('vol_t_minus_1_vs_ma20', 0.0)) >= -5:
+            if row == 10 and float(data.get('vol_t_minus_1_vs_ma20', 0.0)) >= -5:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
             # Highlight hàng vol: vol_vs_ma20 nếu biên độ >= -5%
-            if row == 10 and float(data.get('vol_vs_ma20', 0.0)) >= -5:
+            if row == 11 and float(data.get('vol_vs_ma20', 0.0)) >= -5:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
-            if row == 11 and float(data.get('price_t_minus_1_c_vs_o', 0.0)) <= -2.5:
+            if row == 12 and float(data.get('price_t_minus_1_c_vs_o', 0.0)) <= -2.5:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
             # Highlight hàng Price: H_vs_L nếu biên độ >= 4%
-            if row == 12 and float(data.get('price_h_vs_l', 0.0)) >= 4:
+            if row == 13 and float(data.get('price_h_vs_l', 0.0)) >= 4:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
             # Highlight hàng Price: T_vs_T-1 nếu tăng mạnh
-            if row == 14 and float(data.get('pct_change', 0.0)) >= 2:
+            if row == 15 and float(data.get('pct_change', 0.0)) >= 2:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
-            if row == 14 and float(data.get('pct_change', 0.0)) < 0:
+            if row == 15 and float(data.get('pct_change', 0.0)) < 0:
                 item.setBackground(LIGHT_ORANGE_COLOR)
 
             self.table.setItem(row, col_pos, item)
@@ -357,7 +365,7 @@ class BuyScannerWindow(QMainWindow):
 
     def _on_vertical_header_clicked(self, row):
         """Click vào hàng Tổng Điểm để toggle sort theo cột symbol"""
-        TOTAL_ROW = 7
+        TOTAL_ROW = self.metric_labels.index('Tổng Điểm')
         if row != TOTAL_ROW:
             return
 

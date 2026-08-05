@@ -23,6 +23,8 @@ from ststock.StockData import StockData
 from ststock.StockDataManager import DataFetcherThread
 from utils.logger import get_logger
 
+from config import CODE_COLORS, FIRST_ROW_SYMBOL
+
 logger = get_logger(__name__)
 
 
@@ -206,7 +208,7 @@ class SellScannerWindow(QMainWindow):
 		for row, item_text in enumerate(items):
 			item = QTableWidgetItem(item_text)
 			item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-			if row == 0:
+			if row == FIRST_ROW_SYMBOL:
 				item.setData(Qt.ItemDataRole.UserRole, key)
 				from config import CODE_COLORS
 				rgb = CODE_COLORS[code] if 0 <= code < len(CODE_COLORS) else None

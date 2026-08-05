@@ -1,3 +1,5 @@
+from PyQt6.QtGui import QColor
+
 DEBUG_LOG = 1
 
 # Bảng màu theo code nhóm cổ phiếu (index = code value)
@@ -25,3 +27,9 @@ CODE_COLORS = [
     (224, 255, 255),    # 19: light cyan
 ]
 
+FIRST_ROW_SYMBOL_B = 0
+
+FIRST_ROW_SYMBOL = -1
+
+LIGHT_BLUE_COLOR = QColor(173, 216, 230)
+LIGHT_ORANGE_COLOR = QColor(255, 200, 150)  # light orange

@@ -325,8 +325,8 @@ class BuyScannerWindow(QMainWindow):
 
 
             # Highlight hàng vol: vol_vs_t_minus_1
-            # if row == 8 and float(data.get('vol_vs_t_minus_1', 0.0)) <= -35:
-                # item.setBackground(QColor(255, 200, 150))
+            if row == 9 and float(data.get('vol_vs_t_minus_1', 0.0)) <= -35:
+                item.setBackground(LIGHT_BLUE_COLOR)
 
             # Highlight hàng vol: vol_t_minus_1_vs_ma20
             if row == 10 and float(data.get('vol_t_minus_1_vs_ma20', 0.0)) >= -5:

@@ -50,11 +50,11 @@ def calculate_scores(symbol, row_t_minus_1, row_t):
 
     prev_vol = float(row_t_minus_1['Volume'])
     curr_vol = float(row_t['Volume'])
-    vol_vs_t_minus_1 = 0.0 if prev_vol == 0 else ((curr_vol - prev_vol) / prev_vol) * 100
+    vol_vs_t_minus_1 = 0.0 if prev_vol == 0 else (curr_vol / prev_vol) * 100
     vma20 = float(row_t['VMA20'])
-    vol_vs_ma20 = 0.0 if vma20 == 0 else ((curr_vol - vma20) / vma20) * 100
+    vol_vs_ma20 = 0.0 if vma20 == 0 else (curr_vol  / vma20) * 100
     prev_vma20 = float(row_t_minus_1['VMA20'])
-    vol_t_minus_1_vs_ma20 = 0.0 if prev_vma20 == 0 else ((prev_vol - prev_vma20) / prev_vma20) * 100
+    vol_t_minus_1_vs_ma20 = 0.0 if prev_vma20 == 0 else (prev_vol / prev_vma20) * 100
 
     open_price = float(row_t['Open'])
     close_price = float(row_t['Close'])
@@ -325,15 +325,15 @@ class BuyScannerWindow(QMainWindow):
 
 
             # Highlight hàng vol: vol_vs_t_minus_1
-            if row == 9 and float(data.get('vol_vs_t_minus_1', 0.0)) <= -35:
+            if row == 9 and float(data.get('vol_vs_t_minus_1', 0.0)) <= 75:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
             # Highlight hàng vol: vol_t_minus_1_vs_ma20
-            if row == 10 and float(data.get('vol_t_minus_1_vs_ma20', 0.0)) >= -5:
+            if row == 10 and float(data.get('vol_t_minus_1_vs_ma20', 0.0)) >= 95:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
             # Highlight hàng vol: vol_vs_ma20 nếu biên độ >= -5%
-            if row == 11 and float(data.get('vol_vs_ma20', 0.0)) >= -5:
+            if row == 11 and float(data.get('vol_vs_ma20', 0.0)) >= 95:
                 item.setBackground(LIGHT_BLUE_COLOR)
 
             if row == 12 and float(data.get('price_t_minus_1_c_vs_o', 0.0)) <= -2.5:

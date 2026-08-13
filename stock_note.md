@@ -9,15 +9,19 @@
 - MAU_LAI_7_2	: 7 điểm, vol T > T-1 (arg1)
 - MAU_LAI_7_2_1	: MAU_LAI_7_2 giá đóng cửa T nằm giữa mở cửa và đóng cửa T-1 còn giá mở cửa T < T-1 đóng cửa (ar2)
 
+- MAU_LAI_x_3  	: 1 xu hướng giảm vol tăng dần nhưng T-1 vol chững lại, vol T-1 > T
 =========================================================
 - MAU_LO_7_1   	: 7 điểm, nến cắm hương giá đóng cửa sát gần với giá mở cửa, vol T >= 1.5 * vol T-1 (arg1)
 
 - MAU_LO_7_2   	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T nhỏ (arg2) và giá đóng cửa gần mức thấp nhất, vol tương đương (ar3)
-- MAU_LO_7_2_1 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T lớn (arg2), vol T = 1.07 T-1 gần tương đương
 - MAU_LO_7_2_2 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T nhỏ (arg2) và giá gần với mức cao nhất, vol tương đương(ar3)
-- MAU_LO_7_2_3 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T lớn (arg2) và giá gần với mức cao nhất, vol T nhỏ hơn rất nhiều T-1(ar3)
 - MAU_LO_7_2_4 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T nhỏ (arg2) và giá gần với mức cao nhất, vol T nhỏ hơn rất nhiều T-1(ar3)
+
+- MAU_LO_7_2_1 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T lớn (arg2), vol T = 1.07 T-1 gần tương đương
+- MAU_LO_7_2_3 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T lớn (arg2) và giá gần với mức cao nhất, vol T nhỏ hơn rất nhiều T-1(ar3)
 - MAU_LO_7_2_5 	: 7 điểm, T-1 phiên giảm điểm lớn < -2.5% (arg1), Biến động giá T lớn (arg2) và giá gần với mức cao nhất, vol T lớn hơn T-1(ar3)
+
+- MAU_LO_7_2_6 	: 7 điểm, xu hướng giảm vol tăng dần sau đó là 1 phiên xanh T
 
 
 - MAU_LO_7_3	: 7 điểm, T-2 nó là phiên mua trước tới nay là cổ về, biên độ giá nhỏ (arg1) giá đóng cửa ko vượt giá mở cửa của phiên đỏ T-1, vol T > T-1 (arg2)
@@ -46,7 +50,9 @@
 
 # 2. Mẫu holding
 - MAU_HOLDING_1: 
-
+# 20260629
+- PHR: 5 điểm, MAU_LAI_x_3 (40%)
+ + Khi xanh ko bán, nhưng với phiên xanh mà vol cao kỷ lục > ma20 = 285% T-1 và 160% ma20
 # 20260701
 - NVL: MAU_LO_7_1,  volume T = 2.06*T-1 => -2.03%
 - DGC: MAU_LO_7_2, (-2.51%), (+0.21%) => -0.42%
@@ -69,14 +75,14 @@
 - PVC: MAU_HOA_7_1 => 0.0%
 - PLC: MAU_LAI_7_1_1 (1.95%), nhưng Giá T-1 (-2.38%) => 0.48%
 - HPG: MAU_LO_7_4 () (0.22%, 0.43%) => -1.09%
-
+- DDV: 6 điểm, xu hướng xuống mạnh mẽ vol tăng dần nhưng phiên T-1 chững lại, giá đóng gần như cover cả nến T-1 giá đóng cửa > giá mở cửa T-1 mà vol T < T-1 (phân kỳ chăng)=>2.86%
 #20260713
 - GEE: MAU_LO_7_6 (0.12%, 0.37%) => -0.5%
 - CII: MAU_LO_7_1 (1.49%) => -2.53%
 - VPL: MAU_LO_7_5 => 1.34%
 - PVS: MAU_LO_65_2 => +2.63%
 
-#20260714
+#20260714 <-25%
 - PHR: MAU_LO_7_2_1 => -2.21%
 - TRC: MAU_LO_7_2_2 (-3.19%) (H_L: 1.92%, C_O: 0.63%) (-15.34%)
 - DPR: MAU_LO_7_4, T-1 giảm lớn (-1.82%), vol T vs T-1 (-23.35%) => -1.06%

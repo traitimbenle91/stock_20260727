@@ -7,9 +7,13 @@
 - MAU_LAI_7_1_4	: MAU_LAI_7_1, biên độ T cao (arg2)
 
 - MAU_LAI_7_2	: 7 điểm, vol T > T-1 (arg1)
-- MAU_LAI_7_2_1	: MAU_LAI_7_2 giá đóng cửa T nằm giữa mở cửa và đóng cửa T-1 còn giá mở cửa T < T-1 đóng cửa (ar2)
+- MAU_LAI_7_2_1	: MAU_LAI_7_2, xu hướng giảm giá và vol giảm dần qua các phiên, giá đóng cửa T nằm giữa mở cửa và đóng cửa T-1 còn giá mở cửa T < T-1 đóng cửa (ar2)
 
+
+- MAU_HOA_7_3 	: MAU_HOA_7_1, giá T-1 <-2.5%
 - MAU_LAI_x_3  	: 1 xu hướng giảm vol tăng dần nhưng T-1 vol chững lại, vol T-1 > T
+
+- MAU_LAI_7_4	: 7 điểm, T-1 là nến đỏ cover T-2 và vol < T-2, T thì là 1 cây nến xanh vol > T-1
 =========================================================
 - MAU_LO_7_1   	: 7 điểm, nến cắm hương giá đóng cửa sát gần với giá mở cửa, vol T >= 1.5 * vol T-1 (arg1)
 
@@ -49,7 +53,15 @@
 - MAU_HOA_7_1: 7 điểm, giá T so với T-1 >3% (arg1), vol T = 1.7 T-1 (arg2, PVC 20260708)
 
 # 2. Mẫu holding
-- MAU_HOLDING_1: 
+- MAU_HOLDING_1: nến đỏ nhưng có thể cover T-1 hoặc 1/2 T-1 nhưng vol lại rất nhỏ < trung bình
+
+# 3. Mẫu bán
+- MAU_BAN_X_1: chu kỳ tăng ,vol trong chu kỳ đó tăng giảm ko đồng đều. Nến phiên nay đỏ nằm sát giá đóng cửa của của T-1 ,vol > trung bình
+- MAU_BAN_X_2: chu kỳ tăng, vol tăng đều nhưng T-1 mất đột ngột vol, T nến đỏ biên động giá cover T-1
+
+
+
+
 # 20260629
 - PHR: 5 điểm, MAU_LAI_x_3 (40%)
  + Khi xanh ko bán, nhưng với phiên xanh mà vol cao kỷ lục > ma20 = 285% T-1 và 160% ma20
@@ -62,6 +74,11 @@
 #20260703
 - PVC: MAU_LO_7_2, nến  T-1 đỏ đặc bao chùm lên nến xanh T-2, (-2.31%),  => Hồi ở phiên T và có thể giảm ở phiên tiếp theo, vol T > 1.1 T-1 => -0.47%
 - NKG: tương tự PVC nhưng vol T >1.7 T-1 => 0%
+===== BÁN======
+- BSI: MAU_BAN_X_1
+
+#20260702
+- TPB: MAU_BAN_X_2
 
 #20260706
 - LPB: MAU_LAI_7_1_1, vol T so với T-1 = -13%  => 3.39%
@@ -131,7 +148,7 @@
 - CTG: MAU_LAI_7_1_3 (-23.22%) (2.82%, 2.11%, 0.87%) => +4.76%
 - VCB: MAU_LAI_7_1_3 (+1%) (2.44%, 0.74%, 0.19%) => +4.25%
 - TCB: MAU_LAI_7_1_3 (+1.42%) (2.88%, 1.24%, 0.88%) => +2.73%
-- TPB: => +2.43%
+- TPB: MAU_LAI_7_4 => +2.43%
 - BID: => 5.77%
 - VPB: MAU_LAI_7_1_3 (-5.14%) (3.13%, 2.07%, 0.2%) => +1.6%
 - POW: MAU_LAI_7_2_1 (80.54%) (3.1%, 1.53%, 0.76%) => +2.92%

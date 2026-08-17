@@ -150,7 +150,22 @@ def _print_table(title: str, rows: list[dict], limit: int, sort_columns: list[st
     # with pd.option_context("display.max_columns", None, "display.width", 200):
     #     print(result_df.to_string(index=False))
 
-    print(result_df[['symbol', 'total_points', 'pct_change', 'vol_vs_t_minus_1', 'vol_t_minus_1_vs_ma20', 'vol_vs_ma20', 'price_o_vs_c', 'price_h_vs_l', 'price_t_minus_1_c_vs_o']].to_string(index=False))
+    # print(result_df[['symbol', 'total_points', 'pct_change', 'vol_vs_t_minus_1', 'vol_t_minus_1_vs_ma20', 'vol_vs_ma20', 'price_o_vs_c', 'price_h_vs_l', 'price_t_minus_1_c_vs_o']].to_string(index=False))
+        # Tạo một dictionary để đổi tên các cột sang dạng viết ngắn gọn
+    short_names = {
+        'symbol': 'Mã',
+        'total_points': 'Điểm',
+        'pct_change': '%_ThayĐổi',
+        'vol_vs_t_minus_1': 'Vol_v_T-1',
+        'vol_t_minus_1_vs_ma20': 'Vol_T-1_v_MA20',
+        'vol_vs_ma20': 'Vol_v_MA20',
+        'price_o_vs_c': 'Gía_O_v_C',
+        'price_h_vs_l': 'Giá_H_v_L',
+        'price_t_minus_1_c_vs_o': 'Giá_T-1_C_v_O'
+    }
+
+    # Lọc các cột cần thiết, đổi tên rồi in ra luôn mà không làm thay đổi DataFrame gốc
+    print(result_df[list(short_names.keys())].rename(columns=short_names).to_string(index=False))
 
 
 def run_cli_scan(mode: str, symbols_file: str, check_date: str | None, limit: int, refresh: bool):

@@ -21,9 +21,9 @@ class StockData:
     def __init__(self):
         # 2. KIỂM TRA VÀ TỰ ĐỘNG TẠO THƯ MỤC (Nếu chưa có)
         # Tham số exist_ok=True giúp code không bị lỗi nếu thư mục đã tồn tại từ trước
-        os.makedirs("backup\\1D", exist_ok=True)
-        os.makedirs("backup\\1H", exist_ok=True)
-        os.makedirs("backup\\5", exist_ok=True)
+        os.makedirs("./backup\\1D", exist_ok=True)
+        os.makedirs("./backup\\1H", exist_ok=True)
+        os.makedirs("./backup\\5", exist_ok=True)
         self.allData = {}
 
     def _pull_data_from_web(self, syb, resl = '1D', timefrom = 0, timeTo = int(round(datetime.datetime.timestamp(datetime.datetime.now())))):

@@ -9,7 +9,7 @@ class StockDataManager:
         # symbols: dict[int, list[str]] -> {code: [syb1, syb2, ...]}
         self.symbols: dict = {}
 
-    def load_symbols(self, filepath="backup/syb_scan.csv", default=None, sybs=None):
+    def load_symbols(self, filepath="./backup/syb_scan.csv", default=None, sybs=None):
         """Load danh sách symbols từ CSV, trả về dict {code: [sybs]}."""
         if sybs is not None:
             return

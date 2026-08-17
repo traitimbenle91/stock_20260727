@@ -3,17 +3,17 @@
 - MAU_LAI_7_1  	: 7 điểm, vol T < T-1 (arg1)
 - MAU_LAI_7_1_1	: MAU_LAI_7_1, biên độ T cao (arg2), Nến cắm hương giá đóng cửa gần sát với giá mở cửa và giá thấp nhất 
 - MAU_LAI_7_1_2	: MAU_LAI_7_1, biên độ T cao (arg2), nến cover cả phiên T-1
-- MAU_LAI_7_1_3	: MAU_LAI_7_1, biên độ T bình thường (arg2), nến T nằm sát mở cửa T-1
+
+- MAU_LAI_7_1_3	: MAU_LAI_7_1, biên độ T bình thường (arg2), nến T nằm sát đóng cửa T-1
 - MAU_LAI_7_1_4	: MAU_LAI_7_1, biên độ T cao (arg2)
 
 - MAU_LAI_7_2	: 7 điểm, vol T > T-1 (arg1)
 - MAU_LAI_7_2_1	: MAU_LAI_7_2, xu hướng giảm giá và vol giảm dần qua các phiên, giá đóng cửa T nằm giữa mở cửa và đóng cửa T-1 còn giá mở cửa T < T-1 đóng cửa (ar2)
 
-
-- MAU_HOA_7_3 	: MAU_HOA_7_1, giá T-1 <-2.5%
-- MAU_LAI_x_3  	: 1 xu hướng giảm vol tăng dần nhưng T-1 vol chững lại, vol T-1 > T
-
 - MAU_LAI_7_4	: 7 điểm, T-1 là nến đỏ cover T-2 và vol < T-2, T thì là 1 cây nến xanh vol > T-1
+
+- MAU_LAI_x_3  	: 1 xu hướng giảm vol tăng dần nhưng T-1 vol chững lại, vol T-1 > T
+- MAU_LAI_x_4	: xu hướng giảm vol giảm dần, T nến xanh vol > T-1
 =========================================================
 - MAU_LO_7_1   	: 7 điểm, nến cắm hương giá đóng cửa sát gần với giá mở cửa, vol T >= 1.5 * vol T-1 (arg1)
 
@@ -58,8 +58,15 @@
 # 3. Mẫu bán
 - MAU_BAN_X_1: chu kỳ tăng ,vol trong chu kỳ đó tăng giảm ko đồng đều. Nến phiên nay đỏ nằm sát giá đóng cửa của của T-1 ,vol > trung bình
 - MAU_BAN_X_2: chu kỳ tăng, vol tăng đều nhưng T-1 mất đột ngột vol, T nến đỏ biên động giá cover T-1
+- MAU_BAN_X_3: chu kỳ tăng, vol tăng đều nhưng T-1 vol > trung bình nhưng T nến đỏ < giá đóng cửa T-1 và vol < trung bình
 
+# 20260508
+- FPT: MAU_LAI_x_4
+# 20260529
+- FPT: MAU_LAI_7_1_3
 
+# 20260604
+- FPT: MAU_BAN_X_3
 
 
 # 20260629
@@ -157,3 +164,6 @@
 - PVT: MAU_LAI_7_1_4 (-50.35%) (4.05%, 2.78%, 2.15%) => +8.26%
 - OIL: MAU_LAI_7_1_3 (-32.38%) (3.18%, 0.78%, 0.78%) => +2.99%
 - TVN: nến T nằm sát giá mở cửa của T-1
+
+=============
+- NLG: MAU_LAI_x_3 

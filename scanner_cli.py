@@ -180,14 +180,15 @@ def run_cli_scan(mode: str, symbols_file: str, check_date: str | None, limit: in
         if df is None or df.empty:
             continue
 
-        rows = _get_rows_for_date(df, check_date)
-        if rows is None:
-            continue
-        row_t_minus_1, row_t = rows
+       
 
         if mode in ("buy", "all"):
             add_ema(df, period=10, source_col="Close")
             add_volume_ma(df, period=20, source_col="Volume")
+            rows = _get_rows_for_date(df, check_date)
+            if rows is None:
+                continue
+            row_t_minus_1, row_t = rows
             buy_rows.append({"code": code, **calculate_buy_scores(symbol, row_t_minus_1, row_t)})
 
         if mode in ("hold", "all"):

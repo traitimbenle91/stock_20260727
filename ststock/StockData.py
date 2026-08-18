@@ -121,7 +121,7 @@ class StockData:
         self.allData[syb] = data
 
     def update_data(self, syb, resl = '1D'):
-        index = self.allData[syb].index[-1]
+        index = self.allData[syb].index[-2]
 
         dTimeFrom = pd.Timestamp(self.allData[syb].at[index, 'Date']).to_pydatetime()
         dataNew = self._pull_data(syb, resl, dTimeFrom)
@@ -136,4 +136,4 @@ class StockData:
         self.allData[syb].index = [i for i in range(len(self.allData[syb]))]
         
         # Lưu dữ liệu cập nhật vào CSV
-        # self.allData[syb].to_csv('.//backup//' + resl + '//' + '//' + syb + '.csv', index=True, encoding='utf-8')
+        self.allData[syb].to_csv('.//backup//' + resl + '//' + '//' + syb + '.csv', index=True, encoding='utf-8')

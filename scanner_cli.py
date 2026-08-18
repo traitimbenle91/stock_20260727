@@ -172,6 +172,7 @@ def _print_table( result_df, limit: int):
         's_vol_vs_t_minus_1': 'S_V/T1',
         's_price_vs_t_minus_1': 'S_P/T1',
         'price_cover_t_minus_1_vs_t': 'T1_Cov/T',
+        'T_bullish': 'T_Green'
     }
     for col, short_name in short_names.items():
         if col in result_df.columns:

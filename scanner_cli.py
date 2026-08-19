@@ -26,8 +26,8 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
         vol_below_vma = 1 if row["Volume"] < row["VMA20"] else 0.5
         return green_candle, price_below_ema, vol_below_vma
 
-    t_minus_1_bullish, t_minus_1_ema, t_minus_1_vol = get_score_t_minus_1(row_t_minus_1)
-    t_bullish, t_ema, t_vol = get_score_t(row_t)
+    t_minus_1_bullish_cond, t_minus_1_ema_cond, t_minus_1_vol_cond = get_score_t_minus_1(row_t_minus_1)
+    t_bullish_cond, t_ema_cond, t_vol_cond = get_score_t(row_t)
 
     prev_close = float(row_t_minus_1["Close"])
     curr_close = float(row_t["Close"])
@@ -53,39 +53,54 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
     prev_close_price = float(row_t_minus_1["Close"])
     price_t_minus_1_c_vs_o = 0.0 if prev_close_price == 0 else round(((prev_close_price - prev_open_price) / prev_close_price) * 100, 2)
 
-    price_cover_t_minus_1_vs_t = 1 if (
+    price_cover_t_minus_1_vs_t_cond = 1 if (
         (prev_open_price > open_price > prev_close_price)
         or (prev_open_price > close_price > prev_close_price)
     ) else 0
 
-    total_points = (
-        t_minus_1_bullish
-        + t_minus_1_ema
-        + t_minus_1_vol
-        + t_bullish
-        + t_ema
-        + t_vol
-        + price_cover_t_minus_1_vs_t
-    )
+    def cal_sum_score_sample1():
+        return (
+            t_minus_1_bullish_cond
+            + t_minus_1_ema_cond
+            + t_minus_1_vol_cond
+            + t_bullish_cond
+            + t_ema_cond
+            + t_vol_cond
+            + price_cover_t_minus_1_vs_t_cond
+        )
+
+    vol_vs_t_minus_1_cond = 1 if vol_vs_t_minus_1 <= 100 else 0
+
+    def cal_sum_score_sample2():
+        return (
+            t_minus_1_bullish_cond
+            + t_minus_1_ema_cond
+            + t_bullish_cond
+            + t_ema_cond
+            + vol_vs_t_minus_1_cond
+        )
 
     return {
         "symbol": symbol,
-        # "T_minus_1_bullish": t_minus_1_bullish,
-        # "T_minus_1_ema": t_minus_1_ema,
-        # "T_minus_1_vol": t_minus_1_vol,
-        "Green": t_bullish,
-        "P_lo_ema": t_ema,
-        "V_lo_ema": t_vol,
-        "P_cov": price_cover_t_minus_1_vs_t,
-        "Total": total_points,
+        # "t_minus_1_bullish_cond": t_minus_1_bullish_cond,
+        # "t_minus_1_ema_cond": t_minus_1_ema_cond,
+        # "t_minus_1_vol_cond": t_minus_1_vol_cond,
+        "Green": t_bullish_cond,
+        "P_lo_ema": t_ema_cond,
+        # "V_lo_ema": t_vol_cond,
+        "P_cov": price_cover_t_minus_1_vs_t_cond,
+        "Sam1": cal_sum_score_sample1(),
+        "Sam2": cal_sum_score_sample2(),
+        "T-1_P_C/0": price_t_minus_1_c_vs_o,
+        "T-1_V_/M20": vol_t_minus_1_vs_ma20,
         "P_changed": pct_change,
         "V_changed": vol_vs_t_minus_1,
-        "T-1_V_/M20": vol_t_minus_1_vs_ma20,
         "V_/M20": vol_vs_ma20,
         "P_O/C": price_o_vs_c,
         "P_H/L": price_h_vs_l,
-        "T-1_P_C/0": price_t_minus_1_c_vs_o,
+        
     }
+
 
 
 def calculate_result_scores(symbol, row_t_next_2, row_t):
@@ -153,7 +168,9 @@ def _print_table( result_df, limit: int):
         # Lọc các cột cần thiết, đổi tên rồi in ra luôn mà không làm thay đổi DataFrame gốc
         print(result_df.to_string(index=False))
 
-def run_cli_scan(symbols_file: str, check_date: str | None, limit: int, refresh: bool):
+    # df_filtered = result_df[result_df['Ty_le_%'] > 50]
+
+def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: int, refresh: bool):
     manager = StockDataManager()
     manager.load_symbols(filepath=symbols_file)
     symbol_pairs = flatten_symbols(manager.symbols)
@@ -197,8 +214,9 @@ def run_cli_scan(symbols_file: str, check_date: str | None, limit: int, refresh:
             pass
             # print("❌ Đã xảy ra lỗi: {symbol} {e}")
             # print("👉 Hướng xử lý: Chỉ số vượt quá số hàng hiện có của bảng!")
+    
 
-    sort_columns = ["Total", "P_changed"]
+    sort_columns = [f"Sam{order}"]
     
     
     buy_df = pd.DataFrame(buy_rows)
@@ -219,6 +237,7 @@ def run_cli_scan(symbols_file: str, check_date: str | None, limit: int, refresh:
 def build_parser():
     parser = argparse.ArgumentParser(description="Stock scanner command line")
     parser.add_argument("-s", "--symbols-file", default="backup/syb_scan.csv")
+    parser.add_argument("-o", "--order", default=1, type=int, help="1: tang dan, 2: giam dan")
     parser.add_argument("-d", "--date", help="Ngay check theo dinh dang dd/mm/yyyy", default=None)
     parser.add_argument("-l", "--limit", type=int, default=20, help="So dong toi da moi bang. 0 de in tat ca")
     parser.add_argument("-r", "--refresh", action="store_true", help="Cap nhat them du lieu moi nhat tu web")
@@ -229,6 +248,7 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
     run_cli_scan(
+        order=args.order,
         symbols_file=args.symbols_file,
         check_date=args.date,
         limit=args.limit,

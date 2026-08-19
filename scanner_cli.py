@@ -232,6 +232,10 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
 
         buy_df = buy_df.merge(result_df[['symbol', 'Result']], on='symbol', how='left')
     _print_table(buy_df, limit)
+    max_value = buy_df[f"Sam{order}"].max()
+    
+    df_filtered = buy_df[buy_df[f"Sam{order}"] > max_value]
+    print(f"\nCác cổ phiếu có Sam{order} > {max_value}:")
 
 
 def build_parser():

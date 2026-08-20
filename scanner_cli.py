@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+import readchar  # Thư viện đọc một ký tự ngay lập tức
+from datetime import datetime, timedelta
 
 import pandas as pd
 
@@ -67,7 +68,7 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
             + t_vol_cond
         )
     def cal_sum_score_sample2():
-        if (prev_open_price > close_price > prev_close_price):
+        if (prev_open_price > close_price > prev_close_price) and (prev_close_price >= open_price):
             return 1
         else:
             return 0
@@ -80,15 +81,17 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
         # "t_minus_1_bullish_cond": t_minus_1_bullish_cond,
         # "t_minus_1_ema_cond": t_minus_1_ema_cond,
         # "t_minus_1_vol_cond": t_minus_1_vol_cond,
-        "Green": t_bullish_cond,
-        "P_lo_ema": t_ema_cond,
+        # "Green": t_bullish_cond,
+        # "P_lo_ema": t_ema_cond,
         # "V_lo_ema": t_vol_cond,
         # "P_cov": price_cover_t_minus_1_vs_t_cond,
         "Sam1": cal_sum_score_sample1(),
         "cov": cal_sum_score_sample2(),
         "vol": vol_vs_t_minus_1_cond,
+        "|": "|",
         "T-1_P_C/0": price_t_minus_1_c_vs_o,
         "T-1_V_/M20": vol_t_minus_1_vs_ma20,
+        "||": "||",
         "P_changed": pct_change,
         "V_changed": vol_vs_t_minus_1,
         "V_/M20": vol_vs_ma20,
@@ -230,7 +233,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
     
     sample_name_sort = f"Sam{order}"
 
-    sort_columns = [sample_name_sort]    
+    sort_columns = [sample_name_sort, 'vol', 'cov']    
     
     buy_df = pd.DataFrame(buy_rows)
     if buy_df.empty:
@@ -243,7 +246,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
 
     if result_rows:
         result_df = pd.DataFrame(result_rows)
-        buy_df['||'] = '||'
+        buy_df['|||'] = '|||'
         result_df = result_df.drop_duplicates(subset=['symbol'])
 
         buy_df = buy_df.merge(result_df[['symbol', 'Result']], on='symbol', how='left')
@@ -264,14 +267,32 @@ def build_parser():
 def main():
     parser = build_parser()
     args = parser.parse_args()
-    run_cli_scan(
-        order=args.order,
-        symbols_file=args.symbols_file,
-        check_date=args.date,
-        limit=args.limit,
-        refresh=args.refresh,
-        show_all=args.all,
-    )
+    while True:
+        print(f"\n=================={args.date}================")
+        run_cli_scan(
+			order=args.order,
+			symbols_file=args.symbols_file,
+			check_date=args.date,
+			limit=args.limit,
+			refresh=args.refresh,
+			show_all=args.all,
+		)
+        print("Bấm phím 'n' (Tiếp), 'p' (Lùi), hoặc 'e' (Thoát) - Không cần bấm Enter...")
+        user_choice = readchar.readkey().lower()
+        
+		
+        current_date = datetime.strptime(args.date, "%d/%m/%Y").date()
+        next_date = current_date
+
+        if user_choice == 'n':
+            next_date = current_date + timedelta(days=1)
+        elif user_choice == 'p':
+            next_date = current_date - timedelta(days=1)
+        else:
+            print("Đang thoát chương trình...")
+            exit() # Dừng toàn bộ chương trình
+
+        args.date = next_date.strftime("%d/%m/%Y")
 
 
 if __name__ == "__main__":

@@ -67,13 +67,18 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
             + t_ema_cond
             + t_vol_cond
         )
-    def cal_sum_score_sample2():
+    def do_price_cov():
         if (prev_open_price > close_price > prev_close_price) and (prev_close_price >= open_price):
             return 1
         else:
             return 0
 
     vol_vs_t_minus_1_cond = 1 if vol_vs_t_minus_1 <= 100 else 0
+
+    vol_t_minus_1_more_t_cond = 1 if vol_vs_t_minus_1 < 100 else 0
+
+    def cal_sum_score_sample2():
+       return t_minus_1_bullish_cond + t_minus_1_ema_cond + t_bullish_cond + t_ema_cond + do_price_cov()
 
 
     return {
@@ -86,9 +91,12 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
         # "V_lo_ema": t_vol_cond,
         # "P_cov": price_cover_t_minus_1_vs_t_cond,
         "Sam1": cal_sum_score_sample1(),
-        "cov": cal_sum_score_sample2(),
+        "cov": do_price_cov(),
         "vol": vol_vs_t_minus_1_cond,
         "|": "|",
+        "Sam2": cal_sum_score_sample2(),
+        'vol2': vol_t_minus_1_more_t_cond,
+        ":": ":",
         "T-1_P_C/0": price_t_minus_1_c_vs_o,
         "T-1_V_/M20": vol_t_minus_1_vs_ma20,
         "||": "||",
@@ -233,21 +241,24 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
     
     sample_name_sort = f"Sam{order}"
 
-    sort_columns = [sample_name_sort, 'vol', 'cov']    
+    sort_columns = {
+        1: [sample_name_sort, 'vol', 'cov'],
+        2: [sample_name_sort, 'vol2']
+    }
     
     buy_df = pd.DataFrame(buy_rows)
     if buy_df.empty:
         print("Khong co du lieu.")
         return
     
-    buy_df = buy_df.sort_values(by=sort_columns, ascending=[False] * len(sort_columns))
-    buy_df = buy_df.drop(columns=["code"])
-    buy_df = buy_df.drop_duplicates(subset=['symbol'])
+    # buy_df = buy_df.sort_values(by=sort_columns[order], ascending=[False] * len(sort_columns[order]))
+    # buy_df = buy_df.drop(columns=["code"])
+    # buy_df = buy_df.drop_duplicates(subset=['symbol'])
 
     if result_rows:
         result_df = pd.DataFrame(result_rows)
         buy_df['|||'] = '|||'
-        result_df = result_df.drop_duplicates(subset=['symbol'])
+        # result_df = result_df.drop_duplicates(subset=['symbol'])
 
         buy_df = buy_df.merge(result_df[['symbol', 'Result']], on='symbol', how='left')
     _print_table(buy_df, limit, sample_name_sort, show_all=show_all)

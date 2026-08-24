@@ -273,7 +273,8 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
         # result_df = result_df.drop_duplicates(subset=['symbol'])
 
         buy_df = buy_df.merge(result_df[['symbol', 'Result']], on='symbol', how='left')
-        buy_df = buy_df.drop_duplicates(subset=['symbol'])
+    buy_df = buy_df.drop_duplicates(subset=['symbol'])
+    buy_df  = buy_df.drop(columns=["code"])
     _print_table(buy_df, limit, order, show_all=show_all)
 
 

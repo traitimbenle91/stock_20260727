@@ -145,7 +145,7 @@ def _get_index_for_date(df: pd.DataFrame, check_date: str | None):
     return idx_t
 
 
-def _print_table( result_df, limit: int,  sample_name_sort, show_all: bool):
+def _print_table( result_df, limit: int,  order, show_all: bool):
     if result_df is None or result_df.empty:
         print("Khong co du lieu.")
         return
@@ -172,27 +172,44 @@ def _print_table( result_df, limit: int,  sample_name_sort, show_all: bool):
     result_df['P_changed'] = result_df['P_changed'].apply(lambda x: bold_terminal(x, 2, less=False))
     result_df['P_changed'] = result_df['P_changed'].apply(lambda x: bold_terminal(x, 0, less=True))
 
+    name_sort = "Result"
+
+    if order > 0:
+        name_sort = f"Sam{order}"
+    
+    sort_columns = {
+        0: ['Result'],
+        1: [name_sort, 'cov', 'vol'],
+        2: [name_sort, 'vol2']
+    }
+
     max_value_dict = {
-        "Sam1": 6,
+        "Result": 2,
+        # "Sam1": 6,
         # "Sam2": 7,
         # "Sam3": 5,
         # "Sam4": 5,
     }
+    
 
     with pd.option_context("display.max_columns", None, "display.width", 200):        
         if show_all:
             print(result_df.to_string(index=False))
         else:
-            
-            max_value = max_value_dict.get(sample_name_sort, result_df[sample_name_sort].max())
-                        
-            df_filtered = result_df[result_df[sample_name_sort] >= max_value]
+            df_filtered = result_df
             try:
-                print(f"\n{sample_name_sort} > {max_value}: {(df_filtered['Result'] >= 0).sum()/ len(df_filtered) * 100:.2f}%")
+                max_value = max_value_dict.get(name_sort, result_df[name_sort].max())
+                                        
+                df_filtered = result_df[result_df[name_sort] >= max_value]
+                df_filtered = df_filtered.sort_values(by=sort_columns[order], ascending=[False] * len(sort_columns[order]))
+                print(f"\n{name_sort} > {max_value}: {(df_filtered['Result'] >= 0).sum()/ len(df_filtered) * 100:.2f}%")
+                
             except Exception as e:
-                print(f"Error filtering by {sample_name_sort}: {e}")
+                print(f"Error filtering by {name_sort}: {e}")
 
             print(df_filtered.to_string(index=False))
+
+            
 
 def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: int, refresh: bool, show_all: bool):
     manager = StockDataManager()
@@ -239,12 +256,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
             # print("❌ Đã xảy ra lỗi: {symbol} {e}")
             # print("👉 Hướng xử lý: Chỉ số vượt quá số hàng hiện có của bảng!")
     
-    sample_name_sort = f"Sam{order}"
-
-    sort_columns = {
-        1: [sample_name_sort, 'vol', 'cov'],
-        2: [sample_name_sort, 'vol2']
-    }
+    
     
     buy_df = pd.DataFrame(buy_rows)
     if buy_df.empty:
@@ -261,14 +273,15 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
         # result_df = result_df.drop_duplicates(subset=['symbol'])
 
         buy_df = buy_df.merge(result_df[['symbol', 'Result']], on='symbol', how='left')
-    _print_table(buy_df, limit, sample_name_sort, show_all=show_all)
+        buy_df = buy_df.drop_duplicates(subset=['symbol'])
+    _print_table(buy_df, limit, order, show_all=show_all)
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Stock scanner command line")
     parser.add_argument("-s", "--symbols-file", default="backup/syb_scan.csv")
     parser.add_argument("-o", "--order", default=1, type=int, help="1: tang dan, 2: giam dan")
-    parser.add_argument("-d", "--date", help="Ngay check theo dinh dang dd/mm/yyyy", default=None)
+    parser.add_argument("-d", "--date", default=datetime.now().strftime("%d/%m/%Y"), help="Ngay check theo dinh dang dd/mm/yyyy")
     parser.add_argument("-l", "--limit", type=int, default=200, help="So dong toi da moi bang. 0 de in tat ca")
     parser.add_argument("-r", "--refresh", action="store_true", help="Cap nhat them du lieu moi nhat tu web")
     parser.add_argument("-a", "--all", action="store_true", help="show all data, not only the filtered ones")

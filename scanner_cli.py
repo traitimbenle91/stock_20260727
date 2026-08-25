@@ -60,6 +60,12 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
 
     def cal_sum_score_sample1():
         return (
+            # t_minus_1_bullish_cond : T-1 red candle
+            # t_minus_1_ema_cond     : T-1 price below ema10
+            # t_minus_1_vol_cond     : T-1 volume < ma20
+            # t_bullish_cond         : T green candle
+            # t_ema_cond             : T  price below ema10
+            # t_vol_cond             : T volume < ma20 
             t_minus_1_bullish_cond
             + t_minus_1_ema_cond
             + t_minus_1_vol_cond
@@ -68,18 +74,21 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
             + t_vol_cond
         )
     def do_price_cov():
-        if (prev_open_price > close_price > prev_close_price) and (prev_close_price >= open_price):
+        if (prev_open_price > close_price > prev_close_price):
             return 1
         else:
             return 0
 
     vol_vs_t_minus_1_cond = 1 if vol_vs_t_minus_1 <= 100 else 0
 
-    vol_t_minus_1_more_t_cond = 1 if vol_vs_t_minus_1 < 100 else 0
-
     def cal_sum_score_sample2():
-       return t_minus_1_bullish_cond + t_minus_1_ema_cond + t_bullish_cond + t_ema_cond + do_price_cov()
-
+       # t_minus_1_bullish_cond : T-1 red candle
+       # t_minus_1_ema_cond     : T-1 price below ema
+       # t_bullish_cond         : T green candle
+       # t_ema_cond             : T  price below ema
+       return   t_minus_1_bullish_cond + \
+                t_minus_1_ema_cond + \
+                t_bullish_cond
 
     return {
         "symbol": symbol,
@@ -95,17 +104,17 @@ def calculate_buy_scores(symbol, row_t_minus_1, row_t):
         "vol": vol_vs_t_minus_1_cond,
         "|": "|",
         "Sam2": cal_sum_score_sample2(),
-        'vol2': vol_t_minus_1_more_t_cond,
+        # 'vol2': vol_t_minus_1_more_t_cond,
         ":": ":",
         "T-1_P_C/0": price_t_minus_1_c_vs_o,
         "T-1_V_/M20": vol_t_minus_1_vs_ma20,
         "||": "||",
-        "P_changed": pct_change,
-        "V_changed": vol_vs_t_minus_1,
+        "P_Chgd": pct_change,
+        "V_Chgd": vol_vs_t_minus_1,
         "V_/M20": vol_vs_ma20,
         "P_O/C": price_o_vs_c,
         "P_H/L": price_h_vs_l,
-        "Close": close_price,
+        "Closed": close_price,
         
     }
 
@@ -150,8 +159,8 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
         print("Khong co du lieu.")
         return
 
-    if limit > 0:
-        result_df = result_df.head(limit)
+    # if limit > 0:
+    #     result_df = result_df.head(limit)
 
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 1000)
@@ -161,7 +170,7 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
             return f"*{val}*" # \033[1m giúp in đậm, \033[0m để reset
         return str(val)
     
-    result_df['V_changed'] = result_df['V_changed'].apply(lambda x: bold_terminal(x, 75, less=True))
+    result_df['V_Chgd'] = result_df['V_Chgd'].apply(lambda x: bold_terminal(x, 100, less=False))
     result_df['T-1_V_/M20'] = result_df['T-1_V_/M20'].apply(lambda x: bold_terminal(x, 95, less=False))
     result_df['V_/M20'] = result_df['V_/M20'].apply(lambda x: bold_terminal(x, 95, less=False))
     result_df['T-1_P_C/0'] = result_df['T-1_P_C/0'].apply(lambda x: bold_terminal(x, -2.5, less=True))
@@ -169,8 +178,8 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
     # Highlight hàng Price: H_vs_L nếu biên độ >= 4%
     result_df['P_H/L'] = result_df['P_H/L'].apply(lambda x: bold_terminal(x, 4, less=False))
 
-    result_df['P_changed'] = result_df['P_changed'].apply(lambda x: bold_terminal(x, 2, less=False))
-    result_df['P_changed'] = result_df['P_changed'].apply(lambda x: bold_terminal(x, 0, less=True))
+    result_df['P_Chgd'] = result_df['P_Chgd'].apply(lambda x: bold_terminal(x, 2, less=False))
+    result_df['P_Chgd'] = result_df['P_Chgd'].apply(lambda x: bold_terminal(x, 0, less=True))
 
     name_sort = "Result"
 
@@ -180,7 +189,7 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
     sort_columns = {
         0: ['Result'],
         1: [name_sort, 'cov', 'vol'],
-        2: [name_sort, 'vol2']
+        2: [name_sort, 'vol']
     }
 
     max_value_dict = {
@@ -192,22 +201,22 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
     }
     
 
-    with pd.option_context("display.max_columns", None, "display.width", 200):        
-        if show_all:
-            print(result_df.to_string(index=False))
-        else:
-            df_filtered = result_df
-            try:
+    with pd.option_context("display.max_columns", None, "display.width", 200):
+        df_filtered = result_df
+        try:
+            if not show_all:                    
                 max_value = max_value_dict.get(name_sort, result_df[name_sort].max())
-                                        
                 df_filtered = result_df[result_df[name_sort] >= max_value]
-                df_filtered = df_filtered.sort_values(by=sort_columns[order], ascending=[False] * len(sort_columns[order]))
                 print(f"\n{name_sort} > {max_value}: {(df_filtered['Result'] >= 0).sum()/ len(df_filtered) * 100:.2f}%")
-                
-            except Exception as e:
-                print(f"Error filtering by {name_sort}: {e}")
+            df_filtered = df_filtered.sort_values(by=sort_columns[order], ascending=[False] * len(sort_columns[order]))
+            
+        except Exception as e:
+            print(f"Error filtering by {name_sort}: {e}")
 
-            print(df_filtered.to_string(index=False))
+        if limit > 0:
+            df_filtered = df_filtered.head(limit)
+
+        print(df_filtered.to_string(index=False))
 
             
 
@@ -318,6 +327,7 @@ def main():
             exit() # Dừng toàn bộ chương trình
 
         args.date = next_date.strftime("%d/%m/%Y")
+        args.refresh = None
 
 
 if __name__ == "__main__":

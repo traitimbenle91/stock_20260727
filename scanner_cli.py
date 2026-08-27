@@ -218,6 +218,30 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
 
         print(df_filtered.to_string(index=False))
 
+        _print_table_with_good(df_filtered)
+
+def _print_table_with_good(df):
+    if df is None or df.empty:
+        print("Khong co du lieu.")
+        return
+
+    df_filtered = df[~df['V_Chgd'].astype(str).str.contains('*', regex=False) & 
+                     ~df['T-1_V_/M20'].astype(str).str.contains('*', regex=False) &
+                     ~df['V_/M20'].astype(str).str.contains('*', regex=False) &
+                     ~df['T-1_P_C/0'].astype(str).str.contains('*', regex=False) &
+                     ~df['P_H/L'].astype(str).str.contains('*', regex=False) &
+                     ~df['P_Chgd'].astype(str).str.contains('*', regex=False)
+                   ]
+    try:
+        print(f"\n Filter good symb result: {(df_filtered['Result'] >= 0).sum()/ len(df_filtered) * 100:.2f}%\n")
+    except Exception as e:
+            print(f"Error filtering by : {e}")
+    if len(df_filtered) <= 0:
+        return
+    print(df_filtered.to_string(index=False))
+
+    
+
             
 
 def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: int, refresh: bool, show_all: bool):
@@ -251,7 +275,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
         idx_t = _get_index_for_date(df, check_date)
 
         if idx_t is None:
-            print(f"Khong tim thay du lieu cho symbol {symbol} vao ngay {check_date}.")
+            # print(f"Khong tim thay du lieu cho symbol {symbol} vao ngay {check_date}.")
             continue
         try:
             row_t_minus_1, row_t = df.iloc[idx_t - 1], df.iloc[idx_t]
@@ -269,7 +293,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
     
     buy_df = pd.DataFrame(buy_rows)
     if buy_df.empty:
-        print("Khong co du lieu.")
+        print("\nKhong co du lieu.\n")
         return
     
     # buy_df = buy_df.sort_values(by=sort_columns[order], ascending=[False] * len(sort_columns[order]))
@@ -302,7 +326,7 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
     while True:
-        print(f"\n=================={args.date}================")
+        print(f"\n|||||||||||||||||||||||||||||||||||||||||||||| {args.date} ||||||||||||||||||||||||||||||||||||||||||||||")
         run_cli_scan(
 			order=args.order,
 			symbols_file=args.symbols_file,

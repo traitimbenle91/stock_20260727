@@ -232,17 +232,41 @@ def _print_table_with_good(df):
                      ~df['P_H/L'].astype(str).str.contains('*', regex=False) &
                      ~df['P_Chgd'].astype(str).str.contains('*', regex=False)
                    ]
+    print("\n ============= Filter good symb ====================")
     try:
-        print(f"\n Filter good symb result: {(df_filtered['Result'] >= 0).sum()/ len(df_filtered) * 100:.2f}%\n")
+        print(f"Result: {(df_filtered['Result'] >= 0).sum()/ len(df_filtered) * 100:.2f}%\n")
     except Exception as e:
             print(f"Error filtering by : {e}")
     if len(df_filtered) <= 0:
+        print("Empty df_filtered\n")
         return
     print(df_filtered.to_string(index=False))
 
     
 
-            
+prev_date = None
+next_date = None
+
+def get_prev_next_date(df, idx_t):
+    global prev_date
+    global next_date
+    current_pos = df.index.get_loc(idx_t)
+
+    # Lấy ngày trước đó (dòng phía trên)
+    if current_pos > 0:
+        prev_date = df.index[current_pos - 1]
+    else:
+        prev_date = None # Không có ngày trước đó vì idx_t là dòng đầu tiên
+
+    # Lấy ngày sau đó (dòng phía dưới)
+    if current_pos < len(df) - 1:
+        next_date = df.index[current_pos + 1]
+    else:
+        next_date = None # Không có ngày sau đó vì idx_t là dòng cuối cùng
+
+    print(next_date)
+    print(type(next_date))
+
 
 def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: int, refresh: bool, show_all: bool):
     manager = StockDataManager()
@@ -278,6 +302,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
             # print(f"Khong tim thay du lieu cho symbol {symbol} vao ngay {check_date}.")
             continue
         try:
+            # get_prev_next_date(df, idx_t)
             row_t_minus_1, row_t = df.iloc[idx_t - 1], df.iloc[idx_t]
             buy_rows.append({"code": code, **calculate_buy_scores(symbol, row_t_minus_1, row_t)})
 
@@ -314,7 +339,10 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
 def build_parser():
     parser = argparse.ArgumentParser(description="Stock scanner command line")
     parser.add_argument("-s", "--symbols-file", default="backup/syb_scan.csv")
-    parser.add_argument("-o", "--order", default=1, type=int, help="1: tang dan, 2: giam dan")
+    parser.add_argument("-o", "--order", default=1, type=int, help="0: Sort following result, \
+                         1: Sort following Same1 (Default), \
+                         2: Sort following Same2 \
+                        ")
     parser.add_argument("-d", "--date", default=datetime.now().strftime("%d/%m/%Y"), help="Ngay check theo dinh dang dd/mm/yyyy")
     parser.add_argument("-l", "--limit", type=int, default=200, help="So dong toi da moi bang. 0 de in tat ca")
     parser.add_argument("-r", "--refresh", action="store_true", help="Cap nhat them du lieu moi nhat tu web")
@@ -335,22 +363,30 @@ def main():
 			refresh=args.refresh,
 			show_all=args.all,
 		)
-        print("Bấm phím 'n' (Tiếp), 'p' (Lùi), hoặc 'e' (Thoát) - Không cần bấm Enter...")
-        user_choice = readchar.readkey().lower()
+        print("Bấm phím 'n' or right arrow (Tiếp), 'p' or left arrow (Lùi), hoặc any key (Thoát)")
+        key = readchar.readkey()
         
 		
         current_date = datetime.strptime(args.date, "%d/%m/%Y").date()
         next_date = current_date
+        # global prev_date
+        # global next_date
+        # print(next_date)
+        # print(type(next_date))
 
-        if user_choice == 'n':
+
+        if key == 'n' or key == readchar.key.RIGHT:
             next_date = current_date + timedelta(days=1)
-        elif user_choice == 'p':
+            # args.date = next_date.strftime("%d/%m/%Y")
+        elif key == 'p'  or key == readchar.key.LEFT:
             next_date = current_date - timedelta(days=1)
+            # args.date = prev_date.strftime("%d/%m/%Y")
         else:
             print("Đang thoát chương trình...")
             exit() # Dừng toàn bộ chương trình
 
         args.date = next_date.strftime("%d/%m/%Y")
+        # args.date
         args.refresh = None
 
 

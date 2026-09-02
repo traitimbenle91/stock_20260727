@@ -189,7 +189,7 @@ def _print_table( result_df, limit: int,  order, show_all: bool):
     sort_columns = {
         0: ['Result'],
         1: [name_sort, 'cov', 'vol'],
-        2: [name_sort, 'vol']
+        2: [name_sort, 'cov', 'vol']
     }
 
     max_value_dict = {

@@ -250,22 +250,18 @@ next_date = None
 def get_prev_next_date(df, idx_t):
     global prev_date
     global next_date
+
     current_pos = df.index.get_loc(idx_t)
 
-    # Lấy ngày trước đó (dòng phía trên)
-    if current_pos > 0:
-        prev_date = df.index[current_pos - 1]
-    else:
-        prev_date = None # Không có ngày trước đó vì idx_t là dòng đầu tiên
+    previous_idx = df.index[current_pos - 1] if current_pos > 0 else None
 
-    # Lấy ngày sau đó (dòng phía dưới)
-    if current_pos < len(df) - 1:
-        next_date = df.index[current_pos + 1]
-    else:
-        next_date = None # Không có ngày sau đó vì idx_t là dòng cuối cùng
+    next_idx = df.index[current_pos + 1] if current_pos < len(df) - 1 else None
 
-    print(next_date)
-    print(type(next_date))
+    if previous_idx:
+        prev_date = df.Date[previous_idx].strftime("%d/%m/%Y")
+
+    if next_idx:
+        next_date = df.Date[next_idx].strftime("%d/%m/%Y")
 
 
 def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: int, refresh: bool, show_all: bool):
@@ -302,7 +298,7 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
             # print(f"Khong tim thay du lieu cho symbol {symbol} vao ngay {check_date}.")
             continue
         try:
-            # get_prev_next_date(df, idx_t)
+            get_prev_next_date(df, idx_t)
             row_t_minus_1, row_t = df.iloc[idx_t - 1], df.iloc[idx_t]
             buy_rows.append({"code": code, **calculate_buy_scores(symbol, row_t_minus_1, row_t)})
 
@@ -320,10 +316,6 @@ def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: i
     if buy_df.empty:
         print("\nKhong co du lieu.\n")
         return
-    
-    # buy_df = buy_df.sort_values(by=sort_columns[order], ascending=[False] * len(sort_columns[order]))
-    # buy_df = buy_df.drop(columns=["code"])
-    # buy_df = buy_df.drop_duplicates(subset=['symbol'])
 
     if result_rows:
         result_df = pd.DataFrame(result_rows)
@@ -368,25 +360,17 @@ def main():
         
 		
         current_date = datetime.strptime(args.date, "%d/%m/%Y").date()
-        next_date = current_date
-        # global prev_date
-        # global next_date
-        # print(next_date)
-        # print(type(next_date))
-
 
         if key == 'n' or key == readchar.key.RIGHT:
-            next_date = current_date + timedelta(days=1)
-            # args.date = next_date.strftime("%d/%m/%Y")
+            args.date = next_date
         elif key == 'p'  or key == readchar.key.LEFT:
-            next_date = current_date - timedelta(days=1)
-            # args.date = prev_date.strftime("%d/%m/%Y")
+            args.date = prev_date
         else:
             print("Đang thoát chương trình...")
             exit() # Dừng toàn bộ chương trình
-
-        args.date = next_date.strftime("%d/%m/%Y")
-        # args.date
+        print(args.date)
+        if args.date is None:
+            args.date = current_date.strftime("%d/%m/%Y")
         args.refresh = None
 
 

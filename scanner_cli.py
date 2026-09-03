@@ -10,6 +10,12 @@ from indicator.indicators import add_ema, add_volume_ma
 from ststock.StockData import StockData
 from ststock.StockDataManager import StockDataManager, flatten_symbols
 from utils.logger import get_logger
+import os
+
+def clear_screen():
+    # Sử 'cls' cho Windows, 'clear' cho Linux và macOS
+    os.system('cls' if os.name == 'nt' else 'clear')
+
 
 logger = get_logger(__name__)
 
@@ -346,6 +352,7 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
     while True:
+        clear_screen()
         print(f"\n|||||||||||||||||||||||||||||||||||||||||||||| {args.date} ||||||||||||||||||||||||||||||||||||||||||||||")
         run_cli_scan(
 			order=args.order,

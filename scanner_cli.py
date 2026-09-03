@@ -258,10 +258,10 @@ def get_prev_next_date(df, idx_t):
     next_idx = df.index[current_pos + 1] if current_pos < len(df) - 1 else None
 
     if previous_idx:
-        prev_date = df.Date[previous_idx].strftime("%d/%m/%Y")
+        prev_date =  pd.to_datetime(df.Date[previous_idx]).strftime("%d/%m/%Y")
 
     if next_idx:
-        next_date = df.Date[next_idx].strftime("%d/%m/%Y")
+        next_date =  pd.to_datetime(df.Date[next_idx]).strftime("%d/%m/%Y")
 
 
 def run_cli_scan(order: int, symbols_file: str, check_date: str | None, limit: int, refresh: bool, show_all: bool):
